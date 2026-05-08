@@ -98,3 +98,51 @@ module.exports.verifyPayment = async (req, res) => {
     });
   }
 };
+
+// New endpoint: /create-order (alternative to create-payment-intent)
+module.exports.createOrder = async (req, res) => {
+  try {
+    const { amount } = req.body;
+    console.log("Create Order - Raw amount from request:", amount);
+
+    // Validate amount
+    const amountInRupees = Number(amount);
+    if (!amountInRupees || isNaN(amountInRupees) || amountInRupees <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid amount. Must be a positive number in rupees.",
+      });
+    }
+
+    // Create Razorpay order
+    const options = {
+      amount: Math.round(amountInRupees * 100), // Convert rupees to paise
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`,
+      payment_capture: 1, // Auto capture payment
+    };
+
+    console.log("Creating Razorpay order with options:", options);
+    const order = await instance.orders.create(options);
+
+    console.log("Razorpay order created successfully:", order.id);
+    res.status(200).json({
+      success: true,
+      order: order,
+      key_id: process.env.RAZORPAY_KEY_ID, // Include key_id for frontend convenience
+    });
+  } catch (error) {
+    console.error("Failed to create Razorpay order:", error);
+    console.error(
+      "Razorpay Error Details:",
+      error.response ? error.response.data : error
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Failed to create payment order",
+      message: error.message,
+      details: error.response ? error.response.data : null,
+    });
+  }
+};

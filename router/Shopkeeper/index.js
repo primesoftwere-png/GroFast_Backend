@@ -1,12 +1,20 @@
 const express = require("express");
 const router = express.Router();
 
+// Import all shopkeeper routes
+const authRoutes = require("./auth.router");
 const productRoutes = require("./product.router");
 const categoryRoutes = require("./category.router");
-// Add other shopkeeper-specific routes as needed
+const orderRoutes = require("./order.router");
+const inventoryRoutes = require("./inventory.router");
+const settingsRoutes = require("./settings.router");
 
 // Mount sub-routes
-router.use("/product", productRoutes); // e.g., /api/shopkeeper/products/...
-router.use("/category", categoryRoutes); // e.g., /api/shopkeeper/categories/...
+router.use("/auth", authRoutes); // Authentication & Registration
+router.use("/product", productRoutes); // Product management
+router.use("/category", categoryRoutes); // Category management
+router.use("/", orderRoutes); // Order management
+router.use("/", inventoryRoutes); // Inventory management
+router.use("/", settingsRoutes); // Settings & Wallet
 
 module.exports = router;

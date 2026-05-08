@@ -1,41 +1,47 @@
-const useModel = require("../../models/user.model");
-const { Server } = require("socket.io");
-const http = require("http");
-const express = require("express");
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
-});
+// controllers/Delivery/delivery.controller.js
+// Main delivery controller - exports all delivery controllers
 
-module.exports.updateDeliveryBoyStatus = async (req, res) => {
-  const { deliveryId } = req.params;
-  const { status } = req.body;
+// Import all delivery controllers
+const deliveryAuth = require('./deliveryAuth.controller');
+const deliveryProfile = require('./deliveryProfile.controller');
+const deliveryAvailability = require('./deliveryAvailability.controller');
+const deliveryOrder = require('./deliveryOrder.controller');
+const deliveryOrderStatus = require('./deliveryOrderStatus.controller');
+const deliveryLocation = require('./deliveryLocation.controller');
+const deliveryWallet = require('./deliveryWallet.controller');
+const deliverySettlement = require('./deliverySettlement.controller');
+const deliveryNotification = require('./deliveryNotification.controller');
+const deliveryIssue = require('./deliveryIssue.controller');
 
-  try {
-    // Update delivery boy status directly
-    const updatedDelivery = await useModel.findByIdAndUpdate(
-      deliveryId,
-      { "roleDetails.deliveryBoy.deliveryBoyStatus": status },
-      { new: true }
-    );
-    
-    if (!updatedDelivery) {
-      return res.status(404).json({
-        message: "Delivery boy not found",
-      });
-    }
-    
-    return res.status(200).json({
-      message: "Delivery status updated successfully",
-      delivery: updatedDelivery,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      message: "Error updating delivery status",
-      error: error.message,
-    });
-  }
+// Export all controllers
+module.exports = {
+  // Authentication
+  ...deliveryAuth,
+  
+  // Profile & KYC
+  ...deliveryProfile,
+  
+  // Availability
+  ...deliveryAvailability,
+  
+  // Order Management
+  ...deliveryOrder,
+  
+  // Order Status Flow
+  ...deliveryOrderStatus,
+  
+  // Location
+  ...deliveryLocation,
+  
+  // Wallet
+  ...deliveryWallet,
+  
+  // Settlement
+  ...deliverySettlement,
+  
+  // Notifications
+  ...deliveryNotification,
+  
+  // Issues
+  ...deliveryIssue
 };

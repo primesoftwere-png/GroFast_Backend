@@ -51,10 +51,20 @@ module.exports.addCategory = async (req, res) => {
 
 module.exports.getCategories = async (req, res) => {
   try {
-    const { search, status, parentOnly } = req.query;
+    const userId = req.user._id; // Get logged-in user's ID
     
-    // Build query
-    let query = {};
+    const { 
+      search, 
+      status, 
+      parentOnly,
+      page = 1,
+      limit = 20,
+      sortBy = 'categoryName',
+      sortOrder = 'asc'
+    } = req.query;
+    
+    // Build query - ONLY fetch categories created by this shopkeeper
+    let query = { createdBy: userId };
     
     // Filter by status (default to active if not specified)
     if (status) {
@@ -72,18 +82,57 @@ module.exports.getCategories = async (req, res) => {
     if (parentOnly === 'true') {
       query.parentCategoryId = null;
     }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Get total count
+    const total = await Category.countDocuments(query);
     
+    // Get categories with pagination
     const categories = await Category.find(query)
       .populate('parentCategoryId', 'categoryName')
       .populate('createdBy', 'fullname email')
-      .sort({ categoryName: 1 })
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum)
       .lean();
+
+    // Get product count for each category (only products created by this shopkeeper)
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const productCount = await productModel.countDocuments({ 
+          productCategory: category._id,
+          createdBy: userId // Only count products created by this shopkeeper
+        });
+        
+        return {
+          ...category,
+          productCount: productCount
+        };
+      })
+    );
       
     res.status(200).json({ 
       success: true,
       message: "Categories retrieved successfully", 
-      categories,
-      count: categories.length
+      data: {
+        categories: categoriesWithCount,
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1
+        }
+      }
     });
   } catch (error) {
     console.error("Get categories error:", error);

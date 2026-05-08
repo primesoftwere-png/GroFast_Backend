@@ -159,47 +159,125 @@ const registerShop = async (req, res) => {
         closingTime = '21:00',
       } = shopData;
 
+      // Validate owner name
       if (!ownerName || ownerName.trim().length === 0) {
-        throw new Error('Owner name is required for fullname mapping');
+        return res.status(400).json({
+          success: false,
+          message: 'Owner name is required'
+        });
       }
+
+      // Validate and normalize email
       if (!email || email.trim().length === 0) {
-        throw new Error('Email is required');
+        return res.status(400).json({
+          success: false,
+          message: 'Email is required'
+        });
       }
       const trimmedEmail = email.trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(trimmedEmail)) {
-        throw new Error('Valid email format is required (e.g., user@example.com)');
-      }
-      if (!phone || phone.trim().length === 0) {
-        throw new Error('Phone number is required');
-      }
-      const cleanPhone = phone.trim().replace(/\D/g, '');
-      const phoneRegex = /^[1-9]\d{9,14}$/;
-      if (!phoneRegex.test(cleanPhone)) {
-        throw new Error('Valid phone number is required (10-15 digits)');
-      }
-      const trimmedPhone = phone.trim();
-      if (!password || password.length < 6) {
-        throw new Error('Password is required and must be at least 6 characters');
+        return res.status(400).json({
+          success: false,
+          message: 'Valid email format is required (e.g., user@example.com)'
+        });
       }
 
+      // Validate phone
+      if (!phone || phone.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number is required'
+        });
+      }
+      const trimmedPhone = phone.trim();
+
+      // Validate password
+      if (!password || password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password is required and must be at least 6 characters'
+        });
+      }
+
+      // Validate coordinates
       if (!Array.isArray(coordinates) || coordinates.length !== 2) {
-        throw new Error('Invalid location coordinates: must be [longitude, latitude]');
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid location coordinates: must be [longitude, latitude]'
+        });
       }
       const [longitude, latitude] = coordinates;
       if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-        throw new Error('Invalid coordinate ranges');
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid coordinate ranges'
+        });
       }
 
+      // Check for existing email with detailed logging
+      console.log('=== EMAIL CHECK START ===');
+      console.log('Original email from request:', email);
+      console.log('Trimmed and lowercased email:', trimmedEmail);
+      
       const existingEmail = await User.findOne({ email: trimmedEmail });
+      
+      console.log('Database query result:', existingEmail);
+      console.log('Existing email found:', existingEmail ? 'YES' : 'NO');
+      
       if (existingEmail) {
-        throw new Error('Email already registered or pending approval');
+        console.log('Found user with email:', {
+          id: existingEmail._id,
+          email: existingEmail.email,
+          phone: existingEmail.phone,
+          role: existingEmail.role,
+          accountStatus: existingEmail.accountStatus
+        });
+        console.log('=== EMAIL CHECK END ===');
+        return res.status(400).json({
+          success: false,
+          message: 'Email already registered or pending approval',
+          debug: {
+            requestedEmail: trimmedEmail,
+            existingEmail: existingEmail.email,
+            userId: existingEmail._id
+          }
+        });
       }
-      const existingPhone = await User.findOne({ phone: trimmedPhone });
-      if (existingPhone) {
-        throw new Error('Phone number already registered or pending approval');
-      }
+      console.log('=== EMAIL CHECK END - No existing email found ===');
 
+      // Check for existing phone with detailed logging
+      console.log('=== PHONE CHECK START ===');
+      console.log('Original phone from request:', phone);
+      console.log('Trimmed phone:', trimmedPhone);
+      
+      const existingPhone = await User.findOne({ phone: trimmedPhone });
+      
+      console.log('Database query result:', existingPhone);
+      console.log('Existing phone found:', existingPhone ? 'YES' : 'NO');
+      
+      if (existingPhone) {
+        console.log('Found user with phone:', {
+          id: existingPhone._id,
+          email: existingPhone.email,
+          phone: existingPhone.phone,
+          role: existingPhone.role,
+          accountStatus: existingPhone.accountStatus
+        });
+        console.log('=== PHONE CHECK END ===');
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already registered or pending approval',
+          debug: {
+            requestedPhone: trimmedPhone,
+            existingPhone: existingPhone.phone,
+            userId: existingPhone._id
+          }
+        });
+      }
+      console.log('=== PHONE CHECK END - No existing phone found ===');
+
+      console.log('=== CREATING USER START ===');
       const hashedPassword = await User.hashPassword(password);
 
       const newUser = new User({
@@ -219,8 +297,12 @@ const registerShop = async (req, res) => {
         },
       });
 
+      console.log('Attempting to save user...');
       const savedUser = await newUser.save();
+      console.log('User saved successfully:', savedUser._id);
+      console.log('=== CREATING USER END ===');
 
+      console.log('=== CREATING SHOPKEEPER START ===');
       const newShopkeeper = new Shopkeeper({
         userId: savedUser._id,
         shopName,
@@ -232,7 +314,10 @@ const registerShop = async (req, res) => {
       });
 
       const savedShopkeeper = await newShopkeeper.save();
+      console.log('Shopkeeper saved successfully:', savedShopkeeper._id);
+      console.log('=== CREATING SHOPKEEPER END ===');
 
+      console.log('=== CREATING SHOP START ===');
       const newShop = new Shop({
         shopkeeperId: savedShopkeeper._id,
         shopName,
@@ -249,6 +334,8 @@ const registerShop = async (req, res) => {
       });
 
       const savedShop = await newShop.save();
+      console.log('Shop saved successfully:', savedShop._id);
+      console.log('=== CREATING SHOP END ===');
 
       console.log(`Notification to Superadmin: New shopkeeper registration pending approval - User ID: ${savedUser._id}, Shop: ${shopName}`);
 
@@ -279,31 +366,61 @@ const registerShop = async (req, res) => {
         code: error.code,
       });
 
+      // Handle MongoDB duplicate key error
       if (error.name === 'MongoServerError' && error.code === 11000) {
         const field = Object.keys(error.keyPattern || {})[0] || 'unknown';        
         if (field === 'email') {
-          throw new Error('Email already exists. Please use a different email address.');
+          return res.status(400).json({
+            success: false,
+            message: 'Email already exists. Please use a different email address.'
+          });
         } else if (field === 'phone') {
-          throw new Error('Phone number already exists. Please use a different phone number.');
+          return res.status(400).json({
+            success: false,
+            message: 'Phone number already exists. Please use a different phone number.'
+          });
         } else {
-          throw new Error('A duplicate value was found. Please check your input.');
+          return res.status(400).json({
+            success: false,
+            message: 'A duplicate value was found. Please check your input.'
+          });
         }
       }
 
+      // Handle Mongoose validation error
       if (error.name === 'ValidationError') {
         const modelName = error.model?.modelName || 'Unknown Model';
         const field = Object.keys(error.errors || {})[0] || 'unknown';
-        const errMsg = error.errors[field].message || `Path \`${field}\` is required.`;
-        throw new Error(`${modelName} validation failed: ${field}: ${errMsg}`);
+        const errMsg = error.errors[field]?.message || `Path \`${field}\` is required.`;
+        return res.status(400).json({
+          success: false,
+          message: `${modelName} validation failed: ${field}: ${errMsg}`
+        });
       }
 
-      throw new Error(error.message || 'Registration submission failed');
+      // Return the error message
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Registration submission failed'
+      });
     }
   } catch (error) {
+    console.error('=== OUTER CATCH BLOCK ===');
     console.error('Registration error:', error);
-    res.status(500).json({  // Changed to 500 for server errors
+    console.error('Error name:', error.name);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
+    // This should NOT return "Email already exists" if we already checked above
+    // This means the error is coming from somewhere else
+    
+    res.status(500).json({
       success: false,
       message: error.message || 'Internal server error during registration',
+      errorDetails: {
+        name: error.name,
+        code: error.code
+      }
     });
   }
 };
@@ -316,6 +433,45 @@ const testBody = (req, res) => {
     receivedBody: req.body,
     keys: Object.keys(req.body || {}),
   });
+};
+
+// Test endpoint to check database
+const testDatabase = async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.json({
+        success: true,
+        message: 'Provide ?email=test@example.com to check if email exists',
+        totalUsers: await User.countDocuments(),
+        totalShopkeepers: await Shopkeeper.countDocuments()
+      });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: trimmedEmail });
+
+    res.json({
+      success: true,
+      message: 'Database check complete',
+      searchedEmail: trimmedEmail,
+      found: !!user,
+      user: user ? {
+        id: user._id,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        accountStatus: user.accountStatus
+      } : null
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Database error',
+      error: error.message
+    });
+  }
 };
 
 // New: Controller methods for approval and listing (to support full flow)
@@ -457,6 +613,7 @@ module.exports = {
   validateRegister,
   registerShop,
   testBody,
+  testDatabase,
   approveShopkeeper,
   getPendingShopkeepers,
 };

@@ -76,11 +76,85 @@ module.exports.addProduct = async (req, res) => {
 
 module.exports.getProducts = async (req, res) => {
   try {
-    const products = await productModel.find().populate('productCategory', 'categoryName').lean();
-    res.status(200).json({ message: "Products retrieved successfully", products });
+    const userId = req.user._id; // Get logged-in user's ID
+    
+    const { 
+      page = 1, 
+      limit = 20, 
+      category, 
+      search, 
+      minPrice, 
+      maxPrice,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build query - ONLY fetch products created by this shopkeeper
+    const query = { createdBy: userId };
+
+    // Filter by category
+    if (category) {
+      query.productCategory = category;
+    }
+
+    // Search by product name or code
+    if (search) {
+      query.$or = [
+        { productName: { $regex: search, $options: 'i' } },
+        { productCode: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Filter by price range
+    if (minPrice || maxPrice) {
+      query.productPrice = {};
+      if (minPrice) query.productPrice.$gte = Number(minPrice);
+      if (maxPrice) query.productPrice.$lte = Number(maxPrice);
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Get total count
+    const total = await productModel.countDocuments(query);
+
+    // Get products with pagination
+    const products = await productModel.find(query)
+      .populate('productCategory', 'categoryName')
+      .populate('createdBy', 'fullname email')
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    res.status(200).json({ 
+      success: true,
+      message: "Products retrieved successfully", 
+      data: {
+        products: products,
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1
+        }
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: "Server error", 
+      error: error.message 
+    });
   }
 };
 
@@ -127,16 +201,89 @@ module.exports.updateProduct = async (req, res) => {
 module.exports.getProductsByUserId = async (req, res) => {
   try {
     const { createdBy } = req.params;
+    const { 
+      page = 1, 
+      limit = 20, 
+      category, 
+      search, 
+      minPrice, 
+      maxPrice,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
     
     if (!mongoose.Types.ObjectId.isValid(createdBy)) {
-      return res.status(400).json({ message: "Invalid user ID" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid user ID" 
+      });
     }
 
-    const products = await productModel.find({ createdBy }).populate('productCategory', 'categoryName');
-    res.status(200).json({ message: "Products retrieved successfully", products });
+    // Build query
+    const query = { createdBy };
+
+    // Filter by category
+    if (category) {
+      query.productCategory = category;
+    }
+
+    // Search by product name or code
+    if (search) {
+      query.$or = [
+        { productName: { $regex: search, $options: 'i' } },
+        { productCode: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Filter by price range
+    if (minPrice || maxPrice) {
+      query.productPrice = {};
+      if (minPrice) query.productPrice.$gte = Number(minPrice);
+      if (maxPrice) query.productPrice.$lte = Number(maxPrice);
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Get total count
+    const total = await productModel.countDocuments(query);
+
+    // Get products with pagination
+    const products = await productModel.find(query)
+      .populate('productCategory', 'categoryName')
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    res.status(200).json({ 
+      success: true,
+      message: "Products retrieved successfully", 
+      data: {
+        products: products,
+        pagination: {
+          currentPage: pageNum,
+          limit: limitNum,
+          total: total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1
+        }
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: "Server error", 
+      error: error.message 
+    });
   }
 };
 

@@ -5,6 +5,7 @@ const authMiddleware = require("../../middlewere/user.middlewere");
 const PaymentController = require("../../controllers/Customer/payment.controller");
 
 router.post("/create-payment-intent", authMiddleware.userMiddlewere, PaymentController.createPaymentIntent);
+router.post("/create-order", authMiddleware.userMiddlewere, PaymentController.createOrder);
 router.get("/get-key", authMiddleware.userMiddlewere, PaymentController.getKey);
 router.post("/verify-payment", authMiddleware.userMiddlewere, PaymentController.verifyPayment);
 

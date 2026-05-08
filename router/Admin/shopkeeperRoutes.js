@@ -1,13 +1,18 @@
-// router/Admin/shopkeeperRoutes.js (Updated: Added Test Route)
+// router/Admin/shopkeeperRoutes.js
 const express = require('express');
-const { validateRegister, registerShop, testBody } = require('../../controllers/Admin/shopkeeperController');
+const { registerShopkeeper } = require('../../controllers/Admin/shopkeeperRegister');
+const { validateRegister, registerShop, testBody, testDatabase } = require('../../controllers/Admin/shopkeeperController');
 
 const router = express.Router();
 
-// Test route: POST /api/admin/shopkeeper/test-body (Send any JSON to verify parsing)
+// Test routes
 router.post('/test-body', testBody);
+router.get('/test-db', testDatabase);
 
-// Main route: POST /api/admin/shopkeeper/register
-router.post('/register', validateRegister, registerShop);
+// MAIN REGISTRATION ENDPOINT - USE THIS
+router.post('/register', registerShopkeeper);
+
+// Old endpoints (backup)
+router.post('/register-old', validateRegister, registerShop);
 
 module.exports = router;

@@ -9,7 +9,7 @@ const CouponUsageSchema = new mongoose.Schema({
   },
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Customer', 
+    ref: 'User',  // Changed from 'Customer' to 'User'
     required: true 
   },
   orderId: { 

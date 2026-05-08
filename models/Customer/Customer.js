@@ -28,4 +28,4 @@ CustomerSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Customer', CustomerSchema);
+module.exports = mongoose.model('CustomerProfile', CustomerSchema);
