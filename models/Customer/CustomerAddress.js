@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const CustomerAddressSchema = new mongoose.Schema({
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Customer', 
+    ref: 'User',  // Changed from 'Customer' to 'User'
     required: true 
   },
   addressType: { 

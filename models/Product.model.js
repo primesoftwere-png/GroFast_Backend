@@ -32,12 +32,21 @@ const productSchema = mongoose.Schema({
         type: Number,
         required: true,
     },
-    productUnit: { // New field with enum
+    productUnit: { // Updated with all units from image
         type: String,
         enum: [
-            'KG', 'G', 'LB', 'OZ', 
-            'LITER', 'ML', 
-            'PER_ITEM', 'PACK', 'BOTTLE', 'CAN', 'DOZEN', 'BUNCH'
+            'Kilogram (kg)', 'kg',
+            'Gram (g)', 'g',
+            'Liter (L)', 'L', 'liter',
+            'Milliliter (ml)', 'ml',
+            'Piece', 'piece',
+            'Packet', 'packet',
+            'Bottle', 'bottle',
+            'Box', 'box',
+            'Dozen', 'dozen',
+            'Bunch', 'bunch',
+            'Can', 'can',
+            'Pack', 'pack'
         ],
         required: true,
     },

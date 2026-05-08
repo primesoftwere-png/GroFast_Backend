@@ -9,8 +9,7 @@ const { Server } = require("socket.io");
 
 const MongoConnection = require("./db/db.js");
 
-const orderSocket = require("./socket/orderSocket.js"); // Socket logic for orders
-// const locationSocket = require("./socket/locationSocket.js"); // Uncomment and integrate if needed
+const { initializeOrderFlowSocket } = require("./socket/orderFlowSocket.js"); // New order flow socket
 
 const configureRoutes = require("./router/index.js"); // Centralized route configuration
 
@@ -22,6 +21,8 @@ const io = new Server(server, {
     origin: "*",
     credentials: true,
   },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Core Middleware (applied globally before routes)
@@ -45,19 +46,15 @@ try {
   process.exit(1); // Exit process on DB failure for production safety
 }
 
+// Make io accessible in routes
+app.set('io', io);
+
+// Initialize Socket.IO for order flow
+initializeOrderFlowSocket(io);
+console.log("✓ Socket.IO Order Flow initialized");
+
 // Configure All Routes (Modular and Centralized)
 configureRoutes(app);
-
-// Socket.IO Handling
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
-  orderSocket(io, socket); // Order socket logic
-  // If needed: locationSocket(io, socket); // Location socket logic
-
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
-  });
-});
 
 // Server Startup with Error Handling
 const PORT = process.env.PORT || 8000;
