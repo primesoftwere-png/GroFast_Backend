@@ -1,9 +1,9 @@
 {
   "info": {
     "name": "Grofast API",
-    "description": "Complete API collection for Grofast API - E-commerce Grocery Delivery Platform\n\nThis collection includes all API endpoints organized by role:\n- Authentication & User Management\n- Customer Operations (Cart, Orders, Payments)\n- Admin & Shopkeeper Management\n- Delivery Boy Operations\n- SuperAdmin System Management\n\nBase URL: http://localhost:8000\nGenerated: 2026-05-13T16:09:44.838Z",
+    "description": "Complete API collection for Grofast API - E-commerce Grocery Delivery Platform\n\nThis collection includes all API endpoints organized by role:\n- Authentication & User Management\n- Customer Operations (Cart, Orders, Payments)\n- Admin & Shopkeeper Management\n- Delivery Boy Operations\n- SuperAdmin System Management\n\nBase URL: http://localhost:8000\nGenerated: 2026-06-03T04:50:26.510Z",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_postman_id": "a0ed19b6-144e-4949-9281-b7a8192c200a"
+    "_postman_id": "a9dee445-59e0-4918-bbf3-2538cd560a5f"
   },
   "item": [
     {

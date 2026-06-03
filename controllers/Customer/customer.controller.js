@@ -25,17 +25,24 @@ module.exports.getAllProducts = async (req, res) => {
 
     // Add category filter by category name (case-insensitive exact match)
     if (category === "most_seller_product") {
-      const deliveredOrders = await Order.find({ orderStatus: { $regex: /^delivered$/i } }).select("_id");
-      const deliveredOrderIds = deliveredOrders.map(order => order._id);
+      const deliveredOrders = await Order.find({
+        orderStatus: { $regex: /^delivered$/i },
+      }).select("_id");
+      const deliveredOrderIds = deliveredOrders.map((order) => order._id);
 
       const bestsellersAgg = await OrderItem.aggregate([
-        { $match: { orderId: { $in: deliveredOrderIds }, productId: { $ne: null } } },
+        {
+          $match: {
+            orderId: { $in: deliveredOrderIds },
+            productId: { $ne: null },
+          },
+        },
         { $group: { _id: "$productId", totalSold: { $sum: "$quantity" } } },
-        { $sort: { totalSold: -1 } }
+        { $sort: { totalSold: -1 } },
       ]);
-      
-      const bestsellerProductIds = bestsellersAgg.map(item => item._id);
-      
+
+      const bestsellerProductIds = bestsellersAgg.map((item) => item._id);
+
       if (bestsellerProductIds.length > 0) {
         query._id = { $in: bestsellerProductIds };
       }
@@ -44,10 +51,10 @@ module.exports.getAllProducts = async (req, res) => {
       const totalPages = Math.ceil(totalDocs / limitNum);
 
       const matchingProducts = await productModel.find(query).select("_id");
-      const matchingProductIds = matchingProducts.map(p => p._id.toString());
+      const matchingProductIds = matchingProducts.map((p) => p._id.toString());
 
-      const sortedMatchingIds = bestsellerProductIds.filter(id => 
-        matchingProductIds.includes(id.toString())
+      const sortedMatchingIds = bestsellerProductIds.filter((id) =>
+        matchingProductIds.includes(id.toString()),
       );
 
       const paginatedIds = sortedMatchingIds.slice(skip, skip + limitNum);
@@ -58,7 +65,9 @@ module.exports.getAllProducts = async (req, res) => {
         .populate({ path: "createdBy", select: "fullname email role" });
 
       const products = paginatedIds
-        .map(id => productsUnsorted.find(p => p._id.toString() === id.toString()))
+        .map((id) =>
+          productsUnsorted.find((p) => p._id.toString() === id.toString()),
+        )
         .filter(Boolean);
 
       return res.status(200).json({
@@ -66,13 +75,17 @@ module.exports.getAllProducts = async (req, res) => {
         pagination: { page: pageNum, limit: limitNum, totalDocs, totalPages },
         data: products,
       });
-
     } else if (category) {
-      const categoryDoc = await Category.findOne({ 
-        categoryName: { $regex: new RegExp(`^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-        status: 'active'
+      const categoryDoc = await Category.findOne({
+        categoryName: {
+          $regex: new RegExp(
+            `^${category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+            "i",
+          ),
+        },
+        status: "active",
       });
-      
+
       if (categoryDoc) {
         query.productCategory = categoryDoc._id;
       } else {
@@ -86,7 +99,7 @@ module.exports.getAllProducts = async (req, res) => {
             totalPages: 0,
           },
           data: [],
-          message: `No products found for category: ${category}`
+          message: `No products found for category: ${category}`,
         });
       }
     }
@@ -134,38 +147,38 @@ module.exports.getBestsellerProducts = async (req, res) => {
 
     // Aggregate order items to find most sold products
     // Only consider delivered orders
-    const deliveredOrders = await Order.find({ 
-      orderStatus: { $regex: /^delivered$/i }
-    }).select('_id');
+    const deliveredOrders = await Order.find({
+      orderStatus: { $regex: /^delivered$/i },
+    }).select("_id");
 
-    const deliveredOrderIds = deliveredOrders.map(order => order._id);
+    const deliveredOrderIds = deliveredOrders.map((order) => order._id);
 
     // Aggregate products by total quantity sold
     const bestsellers = await OrderItem.aggregate([
       {
         $match: {
           orderId: { $in: deliveredOrderIds },
-          productId: { $ne: null } // Only include items with valid product references
-        }
+          productId: { $ne: null }, // Only include items with valid product references
+        },
       },
       {
         $group: {
           _id: "$productId",
           totalQuantitySold: { $sum: "$quantity" },
           totalRevenue: { $sum: "$totalPrice" },
-          orderCount: { $sum: 1 }
-        }
+          orderCount: { $sum: 1 },
+        },
       },
       {
-        $sort: { totalQuantitySold: -1 }
+        $sort: { totalQuantitySold: -1 },
       },
       {
-        $limit: limitNum
-      }
+        $limit: limitNum,
+      },
     ]);
 
     // Get product details for bestsellers
-    const productIds = bestsellers.map(item => item._id);
+    const productIds = bestsellers.map((item) => item._id);
     const products = await productModel
       .find({ _id: { $in: productIds } })
       .populate("productCategory")
@@ -175,22 +188,26 @@ module.exports.getBestsellerProducts = async (req, res) => {
       });
 
     // Merge product details with sales data
-    const result = bestsellers.map(bestseller => {
-      const product = products.find(p => p._id.toString() === bestseller._id.toString());
-      return {
-        ...product?.toObject(),
-        salesData: {
-          totalQuantitySold: bestseller.totalQuantitySold,
-          totalRevenue: bestseller.totalRevenue,
-          orderCount: bestseller.orderCount
-        }
-      };
-    }).filter(item => item._id); // Filter out any null products
+    const result = bestsellers
+      .map((bestseller) => {
+        const product = products.find(
+          (p) => p._id.toString() === bestseller._id.toString(),
+        );
+        return {
+          ...product?.toObject(),
+          salesData: {
+            totalQuantitySold: bestseller.totalQuantitySold,
+            totalRevenue: bestseller.totalRevenue,
+            orderCount: bestseller.orderCount,
+          },
+        };
+      })
+      .filter((item) => item._id); // Filter out any null products
 
     res.status(200).json({
       success: true,
       data: result,
-      count: result.length
+      count: result.length,
     });
   } catch (error) {
     res.status(500).json({
@@ -214,7 +231,6 @@ module.exports.getProfileById = async (req, res) => {
   }
 };
 
-
 // ✅ Get product by ID
 module.exports.getProductById = async (req, res) => {
   try {
@@ -224,7 +240,7 @@ module.exports.getProductById = async (req, res) => {
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid product ID format"
+        message: "Invalid product ID format",
       });
     }
 
@@ -239,23 +255,22 @@ module.exports.getProductById = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found"
+        message: "Product not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: product
+      data: product,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Error fetching product",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
 
 // ✅ Get all active categories
 module.exports.getAllCategories = async (req, res) => {
@@ -263,7 +278,7 @@ module.exports.getAllCategories = async (req, res) => {
     const { page, limit, search, parentOnly } = req.query;
 
     // Build query
-    let query = { status: 'active' };
+    let query = { status: "active" };
 
     // Filter by search term
     if (search) {
@@ -271,7 +286,7 @@ module.exports.getAllCategories = async (req, res) => {
     }
 
     // Filter for parent categories only (top-level categories)
-    if (parentOnly === 'true') {
+    if (parentOnly === "true") {
       query.parentCategoryId = null;
     }
 
@@ -284,10 +299,9 @@ module.exports.getAllCategories = async (req, res) => {
       const totalDocs = await Category.countDocuments(query);
       const totalPages = Math.ceil(totalDocs / limitNum);
 
-      const categories = await Category
-        .find(query)
-        .populate('parentCategoryId', 'categoryName')
-        .populate('createdBy', 'fullname email')
+      const categories = await Category.find(query)
+        .populate("parentCategoryId", "categoryName")
+        .populate("createdBy", "fullname email")
         .skip(skip)
         .limit(limitNum)
         .sort({ categoryName: 1 });
@@ -305,16 +319,15 @@ module.exports.getAllCategories = async (req, res) => {
     }
 
     // Without pagination - return all categories
-    const categories = await Category
-      .find(query)
-      .populate('parentCategoryId', 'categoryName')
-      .populate('createdBy', 'fullname email')
+    const categories = await Category.find(query)
+      .populate("parentCategoryId", "categoryName")
+      .populate("createdBy", "fullname email")
       .sort({ categoryName: 1 });
 
     res.status(200).json({
       success: true,
       data: categories,
-      count: categories.length
+      count: categories.length,
     });
   } catch (error) {
     res.status(500).json({
@@ -330,34 +343,33 @@ module.exports.getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await Category
-      .findOne({ _id: id, status: 'active' })
-      .populate('parentCategoryId', 'categoryName')
-      .populate('createdBy', 'fullname email');
+    const category = await Category.findOne({ _id: id, status: "active" })
+      .populate("parentCategoryId", "categoryName")
+      .populate("createdBy", "fullname email");
 
     if (!category) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Category not found" 
+        message: "Category not found",
       });
     }
 
     // Count products in this category
-    const productCount = await productModel.countDocuments({ 
-      productCategory: id 
+    const productCount = await productModel.countDocuments({
+      productCategory: id,
     });
 
     res.status(200).json({
       success: true,
       data: {
         ...category.toObject(),
-        productCount
-      }
+        productCount,
+      },
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message 
+      message: error.message,
     });
   }
 };
@@ -367,36 +379,35 @@ module.exports.getCategoriesWithProductCount = async (req, res) => {
   try {
     const { parentOnly } = req.query;
 
-    let query = { status: 'active' };
+    let query = { status: "active" };
 
     // Filter for parent categories only
-    if (parentOnly === 'true') {
+    if (parentOnly === "true") {
       query.parentCategoryId = null;
     }
 
-    const categories = await Category
-      .find(query)
-      .populate('parentCategoryId', 'categoryName')
+    const categories = await Category.find(query)
+      .populate("parentCategoryId", "categoryName")
       .sort({ categoryName: 1 });
 
     // Get product count for each category
     const categoriesWithCount = await Promise.all(
       categories.map(async (category) => {
         const productCount = await productModel.countDocuments({
-          productCategory: category._id
+          productCategory: category._id,
         });
 
         return {
           ...category.toObject(),
-          productCount
+          productCount,
         };
-      })
+      }),
     );
 
     res.status(200).json({
       success: true,
       data: categoriesWithCount,
-      count: categoriesWithCount.length
+      count: categoriesWithCount.length,
     });
   } catch (error) {
     res.status(500).json({
@@ -411,41 +422,49 @@ module.exports.getCategoriesWithProductCount = async (req, res) => {
 module.exports.getStructuredCategories = async (req, res) => {
   try {
     // Fetch all active categories
-    const categories = await Category.find({ status: 'active' }).sort({ categoryName: 1 }).lean();
+    const categories = await Category.find({ status: "active" })
+      .sort({ categoryName: 1 })
+      .lean();
 
     // Get product count for each category
     const categoriesWithCount = await Promise.all(
       categories.map(async (category) => {
         const productCount = await productModel.countDocuments({
-          productCategory: category._id
+          productCategory: category._id,
         });
         return {
           ...category,
-          productCount
+          productCount,
         };
-      })
+      }),
     );
 
     // Perfectly separate parents and children
-    const parents = categoriesWithCount.filter(c => c.categoryType === 'parent' || !c.parentCategoryId);
-    const children = categoriesWithCount.filter(c => c.categoryType === 'child' || !!c.parentCategoryId);
+    const parents = categoriesWithCount.filter(
+      (c) => c.categoryType === "parent" || !c.parentCategoryId,
+    );
+    const children = categoriesWithCount.filter(
+      (c) => c.categoryType === "child" || !!c.parentCategoryId,
+    );
 
     // Map children into their respective parents to form an array
-    const structuredCategories = parents.map(parent => {
-      const parentChildren = children.filter(child => 
-        child.parentCategoryId && child.parentCategoryId.toString() === parent._id.toString()
+    const structuredCategories = parents.map((parent) => {
+      const parentChildren = children.filter(
+        (child) =>
+          child.parentCategoryId &&
+          child.parentCategoryId.toString() === parent._id.toString(),
       );
-      
+
       return {
         ...parent,
-        children: parentChildren
+        children: parentChildren,
       };
     });
 
     res.status(200).json({
       success: true,
       message: "Categories fetched successfully",
-      data: structuredCategories
+      data: structuredCategories,
     });
   } catch (error) {
     res.status(500).json({
@@ -474,21 +493,21 @@ module.exports.addAddress = async (req, res) => {
       longitude,
       lan,
       lng,
-      isDefault
+      isDefault,
     } = req.body;
 
     // Validation
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required"
+        message: "User ID is required",
       });
     }
 
     if (!addressLine1 || !city || !state || !pincode) {
       return res.status(400).json({
         success: false,
-        message: "Address Line 1, City, State, and Pincode are required"
+        message: "Address Line 1, City, State, and Pincode are required",
       });
     }
 
@@ -497,7 +516,7 @@ module.exports.addAddress = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
@@ -505,21 +524,24 @@ module.exports.addAddress = async (req, res) => {
     if (isDefault === true) {
       await CustomerAddress.updateMany(
         { customerId: userId },
-        { $set: { isDefault: false } }
+        { $set: { isDefault: false } },
       );
     }
 
     // If this is the first address, make it default automatically
-    const existingAddressCount = await CustomerAddress.countDocuments({ customerId: userId });
-    const shouldBeDefault = existingAddressCount === 0 ? true : (isDefault || false);
+    const existingAddressCount = await CustomerAddress.countDocuments({
+      customerId: userId,
+    });
+    const shouldBeDefault =
+      existingAddressCount === 0 ? true : isDefault || false;
 
     // Create new address
     const newAddress = new CustomerAddress({
       customerId: userId,
-      addressType: addressType || 'home',
+      addressType: addressType || "home",
       addressLine1,
-      addressLine2: addressLine2 || '',
-      landmark: landmark || '',
+      addressLine2: addressLine2 || "",
+      landmark: landmark || "",
       city,
       state,
       pincode,
@@ -527,7 +549,7 @@ module.exports.addAddress = async (req, res) => {
       longitude: longitude || null,
       lan: lan || null,
       lng: lng || null,
-      isDefault: shouldBeDefault
+      isDefault: shouldBeDefault,
     });
 
     await newAddress.save();
@@ -535,15 +557,14 @@ module.exports.addAddress = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Address added successfully",
-      data: newAddress
+      data: newAddress,
     });
-
   } catch (error) {
     console.error("Error in addAddress:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to add address",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -557,7 +578,7 @@ module.exports.getUserAddresses = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required"
+        message: "User ID is required",
       });
     }
 
@@ -565,27 +586,28 @@ module.exports.getUserAddresses = async (req, res) => {
     if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
     // Get all addresses for user
-    const addresses = await CustomerAddress.find({ customerId: userId })
-      .sort({ isDefault: -1, createdAt: -1 }); // Default address first, then by creation date
+    const addresses = await CustomerAddress.find({ customerId: userId }).sort({
+      isDefault: -1,
+      createdAt: -1,
+    }); // Default address first, then by creation date
 
     return res.status(200).json({
       success: true,
       message: "Addresses retrieved successfully",
       data: addresses,
-      count: addresses.length
+      count: addresses.length,
     });
-
   } catch (error) {
     console.error("Error in getUserAddresses:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve addresses",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -599,7 +621,7 @@ module.exports.getAddressById = async (req, res) => {
     if (!addressId) {
       return res.status(400).json({
         success: false,
-        message: "Address ID is required"
+        message: "Address ID is required",
       });
     }
 
@@ -607,7 +629,7 @@ module.exports.getAddressById = async (req, res) => {
     if (!addressId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid address ID format"
+        message: "Invalid address ID format",
       });
     }
 
@@ -616,22 +638,21 @@ module.exports.getAddressById = async (req, res) => {
     if (!address) {
       return res.status(404).json({
         success: false,
-        message: "Address not found"
+        message: "Address not found",
       });
     }
 
     return res.status(200).json({
       success: true,
       message: "Address retrieved successfully",
-      data: address
+      data: address,
     });
-
   } catch (error) {
     console.error("Error in getAddressById:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve address",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -652,14 +673,14 @@ module.exports.updateAddress = async (req, res) => {
       longitude,
       lan,
       lng,
-      isDefault
+      isDefault,
     } = req.body;
 
     // Validation
     if (!addressId) {
       return res.status(400).json({
         success: false,
-        message: "Address ID is required"
+        message: "Address ID is required",
       });
     }
 
@@ -667,7 +688,7 @@ module.exports.updateAddress = async (req, res) => {
     if (!addressId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid address ID format"
+        message: "Invalid address ID format",
       });
     }
 
@@ -677,7 +698,7 @@ module.exports.updateAddress = async (req, res) => {
     if (!address) {
       return res.status(404).json({
         success: false,
-        message: "Address not found"
+        message: "Address not found",
       });
     }
 
@@ -685,7 +706,7 @@ module.exports.updateAddress = async (req, res) => {
     if (isDefault === true) {
       await CustomerAddress.updateMany(
         { customerId: address.customerId, _id: { $ne: addressId } },
-        { $set: { isDefault: false } }
+        { $set: { isDefault: false } },
       );
     }
 
@@ -709,15 +730,14 @@ module.exports.updateAddress = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Address updated successfully",
-      data: address
+      data: address,
     });
-
   } catch (error) {
     console.error("Error in updateAddress:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update address",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -731,7 +751,7 @@ module.exports.deleteAddress = async (req, res) => {
     if (!addressId) {
       return res.status(400).json({
         success: false,
-        message: "Address ID is required"
+        message: "Address ID is required",
       });
     }
 
@@ -739,7 +759,7 @@ module.exports.deleteAddress = async (req, res) => {
     if (!addressId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid address ID format"
+        message: "Invalid address ID format",
       });
     }
 
@@ -748,7 +768,7 @@ module.exports.deleteAddress = async (req, res) => {
     if (!address) {
       return res.status(404).json({
         success: false,
-        message: "Address not found"
+        message: "Address not found",
       });
     }
 
@@ -760,7 +780,9 @@ module.exports.deleteAddress = async (req, res) => {
 
     // If deleted address was default, set another address as default
     if (wasDefault) {
-      const remainingAddresses = await CustomerAddress.find({ customerId }).sort({ createdAt: -1 });
+      const remainingAddresses = await CustomerAddress.find({
+        customerId,
+      }).sort({ createdAt: -1 });
       if (remainingAddresses.length > 0) {
         remainingAddresses[0].isDefault = true;
         await remainingAddresses[0].save();
@@ -769,15 +791,14 @@ module.exports.deleteAddress = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Address deleted successfully"
+      message: "Address deleted successfully",
     });
-
   } catch (error) {
     console.error("Error in deleteAddress:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to delete address",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -792,14 +813,14 @@ module.exports.setDefaultAddress = async (req, res) => {
     if (!addressId) {
       return res.status(400).json({
         success: false,
-        message: "Address ID is required"
+        message: "Address ID is required",
       });
     }
 
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required"
+        message: "User ID is required",
       });
     }
 
@@ -807,7 +828,7 @@ module.exports.setDefaultAddress = async (req, res) => {
     if (!addressId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid address ID format"
+        message: "Invalid address ID format",
       });
     }
 
@@ -817,7 +838,7 @@ module.exports.setDefaultAddress = async (req, res) => {
     if (!address) {
       return res.status(404).json({
         success: false,
-        message: "Address not found"
+        message: "Address not found",
       });
     }
 
@@ -825,14 +846,14 @@ module.exports.setDefaultAddress = async (req, res) => {
     if (address.customerId.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Unauthorized: Address does not belong to this user"
+        message: "Unauthorized: Address does not belong to this user",
       });
     }
 
     // Unset all default addresses for this user
     await CustomerAddress.updateMany(
       { customerId: userId },
-      { $set: { isDefault: false } }
+      { $set: { isDefault: false } },
     );
 
     // Set this address as default
@@ -843,15 +864,14 @@ module.exports.setDefaultAddress = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Default address updated successfully",
-      data: address
+      data: address,
     });
-
   } catch (error) {
     console.error("Error in setDefaultAddress:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to set default address",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -865,7 +885,7 @@ module.exports.getDefaultAddress = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required"
+        message: "User ID is required",
       });
     }
 
@@ -873,35 +893,34 @@ module.exports.getDefaultAddress = async (req, res) => {
     if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
     // Find default address
-    const defaultAddress = await CustomerAddress.findOne({ 
-      customerId: userId, 
-      isDefault: true 
+    const defaultAddress = await CustomerAddress.findOne({
+      customerId: userId,
+      isDefault: true,
     });
 
     if (!defaultAddress) {
       return res.status(404).json({
         success: false,
-        message: "No default address found"
+        message: "No default address found",
       });
     }
 
     return res.status(200).json({
       success: true,
       message: "Default address retrieved successfully",
-      data: defaultAddress
+      data: defaultAddress,
     });
-
   } catch (error) {
     console.error("Error in getDefaultAddress:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve default address",
-      error: error.message
+      error: error.message,
     });
   }
 };

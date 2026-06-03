@@ -44,63 +44,51 @@ module.exports.markOrderPickedUp = async (req, res) => {
       });
     }
 
-    // Check current status
-    if (order.orderStatus !== 'ready_for_pickup') {
+    // Check current status - can verify if it's waiting for OTP or recently reached store
+    const validPrevStatuses = ['DELIVERY_ASSIGNED', 'DELIVERY_REACHED_STORE', 'WAITING_PICKUP_OTP'];
+    if (!validPrevStatuses.includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: `Invalid status transition. Current status: ${order.orderStatus}`
       });
     }
 
-    // Verify pickup OTP
-    const otpRecord = await OrderOTP.findOne({
-      orderId: orderId,
-      otpType: 'pickup',
-      isVerified: false
-    });
-
-    if (!otpRecord) {
-      return res.status(404).json({
-        success: false,
-        message: "Pickup OTP not found or already verified"
+    // Verify pickup OTP (Shopkeeper receives order.otp via socket)
+    let isOtpValid = false;
+    
+    if (order.otp && order.otp === pickupOTP.trim()) {
+      isOtpValid = true;
+    } else {
+      // Fallback: check OrderOTP collection just in case
+      const otpRecord = await OrderOTP.findOne({
+        orderId: orderId,
+        otpType: 'pickup',
+        isVerified: false
       });
+      
+      if (otpRecord && !otpRecord.isExpired() && !otpRecord.isMaxAttemptsReached() && otpRecord.otp === pickupOTP.trim()) {
+        isOtpValid = true;
+        otpRecord.isVerified = true;
+        otpRecord.verifiedAt = Date.now();
+        otpRecord.verifiedBy = deliveryBoyId;
+        await otpRecord.save();
+      } else if (otpRecord && otpRecord.otp !== pickupOTP.trim()) {
+        otpRecord.attempts += 1;
+        await otpRecord.save();
+      }
     }
 
-    // Check if OTP expired
-    if (otpRecord.isExpired()) {
+    if (!isOtpValid) {
       return res.status(400).json({
         success: false,
-        message: "Pickup OTP has expired. Please request a new one."
+        message: "Invalid pickup OTP"
       });
     }
-
-    // Check max attempts
-    if (otpRecord.isMaxAttemptsReached()) {
-      return res.status(400).json({
-        success: false,
-        message: "Maximum OTP attempts reached. Please contact support."
-      });
-    }
-
-    // Verify OTP
-    if (otpRecord.otp !== pickupOTP.trim()) {
-      otpRecord.attempts += 1;
-      await otpRecord.save();
-
-      return res.status(400).json({
-        success: false,
-        message: `Invalid pickup OTP. Attempts remaining: ${otpRecord.maxAttempts - otpRecord.attempts}`
-      });
-    }
-
-    // Mark OTP as verified
-    otpRecord.isVerified = true;
-    otpRecord.verifiedAt = Date.now();
-    otpRecord.verifiedBy = deliveryBoyId;
-    await otpRecord.save();
 
     // Update order status
-    order.orderStatus = 'picked_up';
+    order.otpVerified = true;
+    order.orderStatus = 'ORDER_PICKED_UP';
+    order.pickedUpAt = Date.now();
     await order.save();
 
     // Create notification
@@ -163,7 +151,7 @@ module.exports.startDelivery = async (req, res) => {
     }
 
     // Check current status
-    if (order.orderStatus !== 'picked_up') {
+    if (order.orderStatus !== 'ORDER_PICKED_UP') {
       return res.status(400).json({
         success: false,
         message: `Invalid status transition. Current status: ${order.orderStatus}. Order must be picked up first.`
@@ -171,7 +159,7 @@ module.exports.startDelivery = async (req, res) => {
     }
 
     // Update order status
-    order.orderStatus = 'out_for_delivery';
+    order.orderStatus = 'OUT_FOR_DELIVERY';
     await order.save();
 
     // Create notification
@@ -241,62 +229,50 @@ module.exports.completeDelivery = async (req, res) => {
     }
 
     // Check current status
-    if (order.orderStatus !== 'out_for_delivery') {
+    const validDeliveryStatuses = ['OUT_FOR_DELIVERY', 'DELIVERY_REACHED_CUSTOMER', 'WAITING_DELIVERY_OTP'];
+    if (!validDeliveryStatuses.includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status transition. Current status: ${order.orderStatus}. Order must be out for delivery.`
+        message: `Invalid status transition. Current status: ${order.orderStatus}. Order must be out for delivery or reached customer.`
       });
     }
 
     // Verify delivery OTP
-    const otpRecord = await OrderOTP.findOne({
-      orderId: orderId,
-      otpType: 'delivery',
-      isVerified: false
-    });
+    let isOtpValid = false;
 
-    if (!otpRecord) {
-      return res.status(404).json({
-        success: false,
-        message: "Delivery OTP not found or already verified"
+    // 1. Check order.deliveryOTP.code if it exists
+    if (order.deliveryOTP && order.deliveryOTP.code === deliveryOTP.trim()) {
+      isOtpValid = true;
+      order.deliveryOTP.verified = true;
+    } else {
+      // 2. Fallback to OrderOTP collection
+      const otpRecord = await OrderOTP.findOne({
+        orderId: orderId,
+        otpType: 'delivery',
+        isVerified: false
       });
+
+      if (otpRecord && !otpRecord.isExpired() && !otpRecord.isMaxAttemptsReached() && otpRecord.otp === deliveryOTP.trim()) {
+        isOtpValid = true;
+        otpRecord.isVerified = true;
+        otpRecord.verifiedAt = Date.now();
+        otpRecord.verifiedBy = deliveryBoyId;
+        await otpRecord.save();
+      } else if (otpRecord && otpRecord.otp !== deliveryOTP.trim()) {
+        otpRecord.attempts += 1;
+        await otpRecord.save();
+      }
     }
 
-    // Check if OTP expired
-    if (otpRecord.isExpired()) {
+    if (!isOtpValid) {
       return res.status(400).json({
         success: false,
-        message: "Delivery OTP has expired. Please request a new one."
+        message: "Invalid delivery OTP"
       });
     }
-
-    // Check max attempts
-    if (otpRecord.isMaxAttemptsReached()) {
-      return res.status(400).json({
-        success: false,
-        message: "Maximum OTP attempts reached. Please contact support."
-      });
-    }
-
-    // Verify OTP
-    if (otpRecord.otp !== deliveryOTP.trim()) {
-      otpRecord.attempts += 1;
-      await otpRecord.save();
-
-      return res.status(400).json({
-        success: false,
-        message: `Invalid delivery OTP. Attempts remaining: ${otpRecord.maxAttempts - otpRecord.attempts}`
-      });
-    }
-
-    // Mark OTP as verified
-    otpRecord.isVerified = true;
-    otpRecord.verifiedAt = Date.now();
-    otpRecord.verifiedBy = deliveryBoyId;
-    await otpRecord.save();
 
     // Update order status
-    order.orderStatus = 'delivered';
+    order.orderStatus = 'DELIVERED';
     order.deliveredAt = Date.now();
     
     // Update payment status for COD

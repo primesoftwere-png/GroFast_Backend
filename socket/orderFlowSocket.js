@@ -205,11 +205,11 @@ function initializeOrderFlowSocket(io) {
         }
 
         // Update order status
-        order.orderStatus = 'CONFIRMED';
+        order.orderStatus = 'SHOP_ACCEPTED';
         order.acceptedAt = new Date();
         await order.save();
 
-        console.log(`✓ Order ${orderId} status: PENDING → CONFIRMED`);
+        console.log(`✓ Order ${orderId} status: PENDING → SHOP_ACCEPTED`);
 
         // Find online delivery boys
         const DeliveryBoy = require('../models/DeliveryBoy/DeliveryBoy');
@@ -232,7 +232,7 @@ function initializeOrderFlowSocket(io) {
                 totalAmount: order.totalAmount,
                 deliveryCharge: order.deliveryCharge,
                 paymentMethod: order.paymentMethod,
-                status: 'CONFIRMED',
+                status: 'SHOP_ACCEPTED',
                 createdAt: order.createdAt
               });
             }
@@ -245,7 +245,7 @@ function initializeOrderFlowSocket(io) {
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
-          status: 'CONFIRMED',
+          status: 'SHOP_ACCEPTED',
           message: 'Your order has been confirmed by the shop',
           timestamp: new Date()
         });
@@ -255,7 +255,7 @@ function initializeOrderFlowSocket(io) {
         // Confirm to shopkeeper
         socket.emit('order-accept-success', {
           orderId: order._id,
-          status: 'CONFIRMED',
+          status: 'SHOP_ACCEPTED',
           message: 'Order confirmed successfully'
         });
 
@@ -295,7 +295,7 @@ function initializeOrderFlowSocket(io) {
         }
 
         // Check if order is in correct status
-        if (order.orderStatus !== 'CONFIRMED') {
+        if (order.orderStatus !== 'SHOP_ACCEPTED') {
           socket.emit('error', { message: `Order cannot be accepted. Current status: ${order.orderStatus}` });
           return;
         }
@@ -320,11 +320,11 @@ function initializeOrderFlowSocket(io) {
           { 
             _id: orderId,
             deliveryBoyId: null,
-            orderStatus: 'CONFIRMED'
+            orderStatus: 'SHOP_ACCEPTED'
           },
           {
             deliveryBoyId: dbId,
-            orderStatus: 'ASSIGNED',
+            orderStatus: 'DELIVERY_ASSIGNED',
             deliveryBoyAssignedAt: new Date()
           },
           { new: true }
@@ -346,7 +346,7 @@ function initializeOrderFlowSocket(io) {
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
-          status: 'ASSIGNED',
+          status: 'DELIVERY_ASSIGNED',
           message: 'Delivery partner assigned',
           deliveryBoy: {
             name: deliveryBoy.userId.fullname,
@@ -373,7 +373,7 @@ function initializeOrderFlowSocket(io) {
         socket.emit('delivery-accept-success', {
           orderId: order._id,
           orderNumber: order.orderNumber,
-          status: 'ASSIGNED',
+          status: 'DELIVERY_ASSIGNED',
           otp: order.otp,
           shopDetails: {
             name: order.shopId.shopName || order.shopId.fullname,
@@ -397,7 +397,7 @@ function initializeOrderFlowSocket(io) {
               orderId: order._id,
               orderNumber: order.orderNumber,
               orderToken: order.orderToken,
-              status: 'ASSIGNED',
+              status: 'DELIVERY_ASSIGNED',
               deliveryBoyName: deliveryBoy.userId.fullname,
               deliveryBoyPhone: deliveryBoy.userId.phone,
               vehicleType: deliveryBoy.vehicleType,
@@ -415,7 +415,7 @@ function initializeOrderFlowSocket(io) {
             body: notifBody,
             orderId: order._id,
             orderNumber: order.orderNumber,
-            status: 'ASSIGNED',
+            status: 'DELIVERY_ASSIGNED',
             deliveryBoyName: deliveryBoy.userId.fullname,
             deliveryBoyPhone: deliveryBoy.userId.phone,
             isRead: false,
