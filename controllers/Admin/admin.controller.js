@@ -64,6 +64,7 @@ module.exports.addCategory = async (req, res) => {
     const { 
       categoryName, 
       description, 
+      categoryType,
       parentCategoryId, 
       status = 'active', 
       createdBy 
@@ -73,6 +74,16 @@ module.exports.addCategory = async (req, res) => {
       return res.status(400).json({ message: "Category name is required" });
     }
 
+    const type = categoryType || (parentCategoryId ? 'child' : 'parent');
+
+    if (type === 'child' && (!parentCategoryId || parentCategoryId === '')) {
+      return res.status(400).json({ message: "Parent category is required when creating a child category" });
+    }
+
+    if (type === 'parent' && parentCategoryId) {
+      return res.status(400).json({ message: "Parent category cannot have a parentCategoryId" });
+    }
+
     let safeParentId = parentCategoryId;
     if (parentCategoryId === '' || parentCategoryId === undefined || parentCategoryId === null) {
       safeParentId = undefined;
@@ -80,11 +91,15 @@ module.exports.addCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid parent category ID" });
     }
 
+    const categoryImage = req.file ? req.file.filename : null;
+
     // Create category directly
     const category = new Category({
       categoryName: categoryName.trim(),
       description: description ? description.trim() : '',
+      categoryType: type,
       parentCategoryId: safeParentId,
+      categoryImage: type === 'parent' && categoryImage ? categoryImage : undefined,
       status,
       createdBy,
     });
@@ -155,6 +170,7 @@ module.exports.updateCategory = async (req, res) => {
     const { 
       categoryName, 
       description, 
+      categoryType,
       parentCategoryId, 
       status 
     } = req.body;
@@ -163,27 +179,53 @@ module.exports.updateCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
+    const existingCategory = await Category.findById(categoryId);
+    if (!existingCategory) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
     if (categoryName && categoryName.trim() === '') {
       return res.status(400).json({ message: "Category name cannot be empty" });
     }
 
-    let safeParentId = parentCategoryId;
-    if (parentCategoryId === '' || parentCategoryId === undefined || parentCategoryId === null) {
-      safeParentId = undefined;
-    } else if (parentCategoryId && !mongoose.Types.ObjectId.isValid(parentCategoryId)) {
+    let safeParentId = parentCategoryId !== undefined ? parentCategoryId : existingCategory.parentCategoryId;
+    const newCategoryType = categoryType || (safeParentId ? 'child' : 'parent');
+
+    if (newCategoryType === 'child' && (!safeParentId || safeParentId === '')) {
+      return res.status(400).json({ message: "Parent category is required when updating to a child category" });
+    }
+
+    if (newCategoryType === 'parent') {
+      safeParentId = null;
+    }
+
+    if (safeParentId && safeParentId !== '' && !mongoose.Types.ObjectId.isValid(safeParentId)) {
       return res.status(400).json({ message: "Invalid parent category ID" });
+    }
+
+    if (safeParentId === '') {
+      safeParentId = null;
     }
 
     if (status && !['active', 'inactive', 'pending'].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    const categoryImage = req.file ? req.file.filename : null;
+
     const updateData = {
       ...(categoryName && { categoryName: categoryName.trim() }),
       ...(description !== undefined && { description: description ? description.trim() : '' }),
-      ...(safeParentId !== undefined && { parentCategoryId: safeParentId }),
+      ...(categoryType && { categoryType }),
+      parentCategoryId: safeParentId,
       ...(status !== undefined && { status }),
     };
+
+    if (newCategoryType === 'parent' && categoryImage) {
+      updateData.categoryImage = categoryImage;
+    } else if (newCategoryType === 'child') {
+      updateData.categoryImage = null; // Unset image if it changes to child
+    }
 
     // Update category directly
     const updatedCategory = await Category.findByIdAndUpdate(

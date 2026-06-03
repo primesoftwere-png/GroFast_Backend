@@ -27,7 +27,9 @@ module.exports.getSettings = async (req, res) => {
           closingTime: shop?.closingTime,
           isOpen: shop?.isOpen,
           commissionRate: shop?.commissionRate,
-          status: shop?.status
+          status: shop?.status,
+          latitude: shop?.latitude,
+          longitude: shop?.longitude
         },
         bankDetails: bankDetails ? {
           accountHolderName: bankDetails.accountHolderName,
@@ -97,6 +99,59 @@ module.exports.updateBusinessHours = async (req, res) => {
 
   } catch (error) {
     console.error('Update business hours error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// ✅ Update Shop Location
+module.exports.updateShopLocation = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { latitude, longitude } = req.body;
+
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Latitude and longitude are required'
+      });
+    }
+
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shopkeeper profile not found'
+      });
+    }
+
+    const shop = await Shop.findOneAndUpdate(
+      { shopkeeperId: shopkeeper._id },
+      { latitude: parseFloat(latitude), longitude: parseFloat(longitude) },
+      { new: true }
+    );
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shop not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Shop location updated successfully',
+      data: {
+        latitude: shop.latitude,
+        longitude: shop.longitude
+      }
+    });
+
+  } catch (error) {
+    console.error('Update shop location error:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error',

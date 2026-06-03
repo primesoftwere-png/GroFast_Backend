@@ -18,7 +18,7 @@ const server = http.createServer(app); // For Socket.IO support
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: true,
     credentials: true,
   },
   pingTimeout: 60000,
@@ -31,38 +31,38 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "*",
-    credentials: true,
+    origin: "*",    
   })
 );
 app.use("/uploads", express.static("uploads"));
 
-// Database Connection with Error Handling (Reverted to try-catch for compatibility)
-try {
-  MongoConnection();
-  console.log("MongoDB connected successfully");
-} catch (error) {
-  console.error("MongoDB connection error:", error);
-  process.exit(1); // Exit process on DB failure for production safety
-}
+// Database Connection with Error Handling
+(async () => {
+  try {
+    await MongoConnection();
+    
+    // Make io accessible in routes
+    app.set('io', io);
 
-// Make io accessible in routes
-app.set('io', io);
+    // Initialize Socket.IO for order flow
+    initializeOrderFlowSocket(io);
+    console.log("✓ Socket.IO Order Flow initialized");
 
-// Initialize Socket.IO for order flow
-initializeOrderFlowSocket(io);
-console.log("✓ Socket.IO Order Flow initialized");
+    // Configure All Routes (Modular and Centralized)
+    configureRoutes(app);
 
-// Configure All Routes (Modular and Centralized)
-configureRoutes(app);
-
-// Server Startup with Error Handling
-const PORT = process.env.PORT || 8000;
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-}).on("error", (error) => {
-  if (error.syscall !== "listen") {
-    throw error;
+    // Server Startup with Error Handling
+    const PORT = process.env.PORT || 8000;
+    server.listen(PORT, () => {
+      console.log(`✅ Server is running on port ${PORT}`);
+    }).on("error", (error) => {
+      if (error.syscall !== "listen") {
+        throw error;
+      }
+      console.error("❌ Server startup error:", error);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    process.exit(1); // Exit process on DB failure for production safety
   }
-  console.error("Server startup error:", error);
-});
+})();

@@ -1,9 +1,11 @@
-const userModel = require("../models/user.model");
+const jwt = require("jsonwebtoken");
 
 module.exports.userMiddlewere = async (req, res, next) => {
   try {
-    const token =
-      req.cookies.token || req.headers["authorization"]?.split(" ")[1];
+    let token = req.cookies.token;
+    if (req.headers["authorization"]) {
+      token = req.headers["authorization"].replace("Bearer ", "").trim();
+    }
     
     if (!token) {
       return res.status(401).json({ 
@@ -12,7 +14,8 @@ module.exports.userMiddlewere = async (req, res, next) => {
       });
     }
 
-    const decoded = await userModel.verifyAuthToken(token);
+    // Verify JWT directly to get specific error types
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     if (!decoded) {
       return res.status(401).json({ 
@@ -24,22 +27,26 @@ module.exports.userMiddlewere = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    console.error("Auth middleware error:", error.message);
-    
-    if (error.message === "Invalid token" || error.name === "JsonWebTokenError") {
+    // Specific message for expired tokens so the client knows to re-login
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ 
+        success: false,
+        message: "Token has expired, please login again" 
+      });
+    }
+
+    // Handle other JWT errors (malformed, invalid signature, etc.)
+    if (error.name === "JsonWebTokenError" ||
+        error.message.includes("token") ||
+        error.message.includes("jwt")) {
       return res.status(401).json({ 
         success: false,
         message: "Unauthorized - Invalid token" 
       });
     }
     
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ 
-        success: false,
-        message: "Unauthorized - Token expired" 
-      });
-    }
-    
+    // Only log truly unexpected errors
+    console.error("Auth middleware error:", error.message);
     res.status(500).json({ 
       success: false,
       message: "Server error", 

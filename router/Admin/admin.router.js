@@ -23,6 +23,7 @@ router.post(
   "/add-category",
   authMiddleware.userMiddlewere,
   roleMiddleware.authorizeRoles("admin", "superadmin"),
+  upload.single("categoryImage"),
   adminController.addCategory
 );
 
@@ -38,6 +39,7 @@ router.put(
   "/update-category/:categoryId",
   authMiddleware.userMiddlewere,
   roleMiddleware.authorizeRoles("admin", "superadmin"),
+  upload.single("categoryImage"),
   adminController.updateCategory
 );
 

@@ -80,6 +80,9 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    googleId: { type: String, unique: true, sparse: true },
+    otp: { type: String },
+    otpExpires: { type: Date }
   },
   { timestamps: true }
 );
@@ -108,7 +111,7 @@ userSchema.methods.generateAuthToken = async function () {
       effectiveStatus, // Use effective status instead of raw accountStatus
     },
     process.env.JWT_SECRET,
-    { expiresIn: "1d" }
+    { expiresIn: "7d" }
   );
   return token;
 };

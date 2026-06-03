@@ -46,6 +46,12 @@ router.get(
   customerController.getCategoriesWithProductCount
 );
 
+// ✅ Get structured categories (parents with nested children)
+router.get(
+  "/categories/structured",
+  customerController.getStructuredCategories
+);
+
 // ✅ Get category by ID
 router.get(
   "/categories/:id",

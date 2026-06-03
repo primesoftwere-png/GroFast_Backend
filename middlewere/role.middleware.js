@@ -30,3 +30,75 @@ module.exports.authorizeRoles = (...roles) => {
     }
   };
 };
+
+// SuperAdmin middleware
+module.exports.isSuperAdmin = (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false,
+        message: "Unauthorized: No user found" 
+      });
+    }
+
+    if (!req.user.role) {
+      return res.status(401).json({ 
+        success: false,
+        message: "Unauthorized: User role is missing" 
+      });
+    }
+
+    const userRole = req.user.role.toString().trim().toLowerCase();
+
+    if (userRole !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: SuperAdmin role required"
+      });
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error in role authorization",
+      error: error.message
+    });
+  }
+};
+
+// Admin middleware (for both admin and superadmin)
+module.exports.isAdmin = (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false,
+        message: "Unauthorized: No user found" 
+      });
+    }
+
+    if (!req.user.role) {
+      return res.status(401).json({ 
+        success: false,
+        message: "Unauthorized: User role is missing" 
+      });
+    }
+
+    const userRole = req.user.role.toString().trim().toLowerCase();
+
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: Admin role required"
+      });
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error in role authorization",
+      error: error.message
+    });
+  }
+};

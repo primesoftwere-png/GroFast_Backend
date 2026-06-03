@@ -62,6 +62,17 @@ const OrderSchema = new mongoose.Schema({
     enum: ['COD', 'ONLINE', 'WALLET'] 
   },
   
+  // Order Items
+  items: [
+    {
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: 'product', required: true },
+      productName: { type: String, required: true },
+      quantity: { type: Number, required: true, min: 1 },
+      price: { type: Number, required: true, min: 0 },
+      totalPrice: { type: Number, required: true, min: 0 }
+    }
+  ],
+  
   // Pricing
   subtotal: { type: Number, required: true, min: 0 },
   deliveryCharge: { type: Number, default: 0.00, min: 0 },

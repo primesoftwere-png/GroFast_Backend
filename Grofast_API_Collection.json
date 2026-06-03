@@ -1,0 +1,3589 @@
+{
+  "info": {
+    "name": "Grofast API",
+    "description": "Complete API collection for Grofast API - E-commerce Grocery Delivery Platform\n\nThis collection includes all API endpoints organized by role:\n- Authentication & User Management\n- Customer Operations (Cart, Orders, Payments)\n- Admin & Shopkeeper Management\n- Delivery Boy Operations\n- SuperAdmin System Management\n\nBase URL: http://localhost:8000\nGenerated: 2026-05-13T16:09:44.838Z",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "a0ed19b6-144e-4949-9281-b7a8192c200a"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "User authentication and account management",
+      "item": [
+        {
+          "name": "POST register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "register"
+              ]
+            },
+            "description": "POST request to /api/user/register (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"1234567890\",\n  \"role\": \"customer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "login"
+              ]
+            },
+            "description": "POST request to /api/user/login (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST forgot-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/forgot-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "forgot-password"
+              ]
+            },
+            "description": "POST request to /api/user/forgot-password (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/reset-password/:token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "reset-password",
+                ":token"
+              ]
+            },
+            "description": "POST request to /api/user/reset-password/:token (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"newPassword123\",\n  \"confirmPassword\": \"newPassword123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT update-address",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/update-address",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "update-address"
+              ]
+            },
+            "description": "PUT request to /api/user/update-address (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"123 Main St\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10001\",\n  \"country\": \"USA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "profile"
+              ]
+            },
+            "description": "GET request to /api/user/profile (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "logout"
+              ]
+            },
+            "description": "GET request to /api/user/logout (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer - Profile",
+      "description": "Customer profile and account management",
+      "item": [
+        {
+          "name": "GET profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "profile"
+              ]
+            },
+            "description": "GET request to /api/customer/profile (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "profile"
+              ]
+            },
+            "description": "PUT request to /api/customer/profile (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"phone\": \"1234567890\",\n  \"email\": \"john@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/address",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "address"
+              ]
+            },
+            "description": "POST request to /api/customer/address (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"street\": \"123 Main St\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10001\",\n  \"country\": \"USA\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET addresses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/addresses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "addresses"
+              ]
+            },
+            "description": "GET request to /api/customer/addresses (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT addressId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/address/:addressId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "address",
+                ":addressId"
+              ]
+            },
+            "description": "PUT request to /api/customer/address/:addressId (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"street\": \"456 Oak Ave\",\n  \"city\": \"Los Angeles\",\n  \"state\": \"CA\",\n  \"zipCode\": \"90001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE addressId",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/customer/address/:addressId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "customer",
+                "address",
+                ":addressId"
+              ]
+            },
+            "description": "DELETE request to /api/customer/address/:addressId (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer - Cart",
+      "description": "Shopping cart management",
+      "item": [
+        {
+          "name": "POST create-cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/create-cart",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "create-cart"
+              ]
+            },
+            "description": "POST request to /api/cart/create-cart (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"product_id_here\",\n      \"quantity\": 2,\n      \"shopId\": \"shop_id_here\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST add-item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/add-item",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "add-item"
+              ]
+            },
+            "description": "POST request to /api/cart/add-item (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"product_id_here\",\n  \"quantity\": 1,\n  \"shopId\": \"shop_id_here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST add-multiple-items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/add-multiple-items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "add-multiple-items"
+              ]
+            },
+            "description": "POST request to /api/cart/add-multiple-items (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"product_id_1\",\n      \"quantity\": 2,\n      \"shopId\": \"shop_id_here\"\n    },\n    {\n      \"productId\": \"product_id_2\",\n      \"quantity\": 1,\n      \"shopId\": \"shop_id_here\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST remove-item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/remove-item",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "remove-item"
+              ]
+            },
+            "description": "POST request to /api/cart/remove-item (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"product_id_here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET get-cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/get-cart",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "get-cart"
+              ]
+            },
+            "description": "GET request to /api/cart/get-cart (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET userId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/user/:userId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "user",
+                ":userId"
+              ]
+            },
+            "description": "GET request to /api/cart/user/:userId (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET userId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/summary/:userId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "summary",
+                ":userId"
+              ]
+            },
+            "description": "GET request to /api/cart/summary/:userId (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET userId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/cart/products/:userId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "products",
+                ":userId"
+              ]
+            },
+            "description": "GET request to /api/cart/products/:userId (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer - Orders",
+      "description": "Order management and tracking",
+      "item": [
+        {
+          "name": "POST create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                "create"
+              ]
+            },
+            "description": "POST request to /api/order/create (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": \"product_id\",\n      \"quantity\": 2,\n      \"shopId\": \"shop_id\"\n    }\n  ],\n  \"deliveryAddressId\": \"address_id\",\n  \"paymentMethod\": \"razorpay\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET my-orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/my-orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                "my-orders"
+              ]
+            },
+            "description": "GET request to /api/order/my-orders (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET orderId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/:orderId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                ":orderId"
+              ]
+            },
+            "description": "GET request to /api/order/:orderId (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT cancel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/:orderId/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                ":orderId",
+                "cancel"
+              ]
+            },
+            "description": "PUT request to /api/order/:orderId/cancel (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET track",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/:orderId/track",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                ":orderId",
+                "track"
+              ]
+            },
+            "description": "GET request to /api/order/:orderId/track (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "POST review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/order/:orderId/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "order",
+                ":orderId",
+                "review"
+              ]
+            },
+            "description": "POST request to /api/order/:orderId/review (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Great service!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer - Payment",
+      "description": "Payment processing with Razorpay",
+      "item": [
+        {
+          "name": "POST create-order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment/create-order",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment",
+                "create-order"
+              ]
+            },
+            "description": "POST request to /api/payment/create-order (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1000,\n  \"currency\": \"INR\",\n  \"orderId\": \"order_id_here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment",
+                "verify"
+              ]
+            },
+            "description": "POST request to /api/payment/verify (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"razorpay_order_id\": \"order_id\",\n  \"razorpay_payment_id\": \"payment_id\",\n  \"razorpay_signature\": \"signature\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment",
+                "history"
+              ]
+            },
+            "description": "GET request to /api/payment/history (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET paymentId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/payment/:paymentId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "payment",
+                ":paymentId"
+              ]
+            },
+            "description": "GET request to /api/payment/:paymentId (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products - Browse",
+      "description": "Browse and search products (Public)",
+      "item": [
+        {
+          "name": "GET products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "description": "GET request to /api/products (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/products/:id (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET bestsellers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products/bestsellers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "bestsellers"
+              ]
+            },
+            "description": "GET request to /api/products/bestsellers (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "search"
+              ]
+            },
+            "description": "GET request to /api/products/search (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET categoryId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products/category/:categoryId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "category",
+                ":categoryId"
+              ]
+            },
+            "description": "GET request to /api/products/category/:categoryId (Public)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Categories - Browse",
+      "description": "Browse product categories (Public)",
+      "item": [
+        {
+          "name": "GET categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "description": "GET request to /api/categories (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/categories/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/categories/:id (Public)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET with-count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/categories/with-count",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "with-count"
+              ]
+            },
+            "description": "GET request to /api/categories/with-count (Public)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Authentication",
+      "description": "Admin authentication",
+      "item": [
+        {
+          "name": "POST login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "login"
+              ]
+            },
+            "description": "POST request to /api/admin/login (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "profile"
+              ]
+            },
+            "description": "GET request to /api/admin/profile (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "logout"
+              ]
+            },
+            "description": "GET request to /api/admin/logout (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Shopkeeper Management",
+      "description": "Manage shopkeepers and shops",
+      "item": [
+        {
+          "name": "POST register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                "register"
+              ]
+            },
+            "description": "POST request to /api/admin/shopkeeper/register (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Shop Owner\",\n  \"email\": \"shop@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"1234567890\",\n  \"shopName\": \"My Shop\",\n  \"shopAddress\": \"123 Shop St\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET all",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                "all"
+              ]
+            },
+            "description": "GET request to /api/admin/shopkeeper/all (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/admin/shopkeeper/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                ":id"
+              ]
+            },
+            "description": "PUT request to /api/admin/shopkeeper/:id (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                ":id"
+              ]
+            },
+            "description": "DELETE request to /api/admin/shopkeeper/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT approve",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/:id/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                ":id",
+                "approve"
+              ]
+            },
+            "description": "PUT request to /api/admin/shopkeeper/:id/approve (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT reject",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/shopkeeper/:id/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "shopkeeper",
+                ":id",
+                "reject"
+              ]
+            },
+            "description": "PUT request to /api/admin/shopkeeper/:id/reject (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin - Dashboard",
+      "description": "Admin dashboard and analytics",
+      "item": [
+        {
+          "name": "GET stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "GET request to /api/admin/dashboard/stats (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "orders"
+              ]
+            },
+            "description": "GET request to /api/admin/orders (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "customers"
+              ]
+            },
+            "description": "GET request to /api/admin/customers (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET revenue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/revenue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "revenue"
+              ]
+            },
+            "description": "GET request to /api/admin/revenue (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopkeeper - Products",
+      "description": "Shopkeeper product management",
+      "item": [
+        {
+          "name": "POST create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                "create"
+              ]
+            },
+            "description": "POST request to /api/shopkeeper/product/create (Protected - Requires Authentication)",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Product Name",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Product description",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "99.99",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "category_id",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "100",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "value": "[]",
+                  "type": "file"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET all",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                "all"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/product/all (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/product/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                ":id"
+              ]
+            },
+            "description": "PUT request to /api/shopkeeper/product/:id (Protected - Requires Authentication)",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Updated Product",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "89.99",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "150",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                ":id"
+              ]
+            },
+            "description": "DELETE request to /api/shopkeeper/product/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT stock",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/product/:id/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "product",
+                ":id",
+                "stock"
+              ]
+            },
+            "description": "PUT request to /api/shopkeeper/product/:id/stock (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock\": 200\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopkeeper - Categories",
+      "description": "Shopkeeper category management",
+      "item": [
+        {
+          "name": "POST create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/category/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "category",
+                "create"
+              ]
+            },
+            "description": "POST request to /api/shopkeeper/category/create (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Category Name\",\n  \"description\": \"Category description\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET all",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/category/all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "category",
+                "all"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/category/all (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/category/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "category",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/category/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/category/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "category",
+                ":id"
+              ]
+            },
+            "description": "PUT request to /api/shopkeeper/category/:id (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Category\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/category/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "category",
+                ":id"
+              ]
+            },
+            "description": "DELETE request to /api/shopkeeper/category/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopkeeper - Orders",
+      "description": "Shopkeeper order management",
+      "item": [
+        {
+          "name": "GET orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "orders"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/orders (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/orders/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "orders",
+                ":id"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/orders/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/orders/:id/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "orders",
+                ":id",
+                "status"
+              ]
+            },
+            "description": "PUT request to /api/shopkeeper/orders/:id/status (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"processing\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET pending",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/orders/pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "orders",
+                "pending"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/orders/pending (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET completed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/orders/completed",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "orders",
+                "completed"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/orders/completed (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopkeeper - Inventory",
+      "description": "Shopkeeper inventory management",
+      "item": [
+        {
+          "name": "GET inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "inventory"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/inventory (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT productId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/inventory/:productId",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "inventory",
+                ":productId"
+              ]
+            },
+            "description": "PUT request to /api/shopkeeper/inventory/:productId (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 50,\n  \"action\": \"add\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET low-stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/inventory/low-stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "inventory",
+                "low-stock"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/inventory/low-stock (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/shopkeeper/inventory/logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "shopkeeper",
+                "inventory",
+                "logs"
+              ]
+            },
+            "description": "GET request to /api/shopkeeper/inventory/logs (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Delivery - Authentication",
+      "description": "Delivery boy authentication",
+      "item": [
+        {
+          "name": "POST login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "login"
+              ]
+            },
+            "description": "POST request to /api/delivery/login (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"delivery@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "profile"
+              ]
+            },
+            "description": "GET request to /api/delivery/profile (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "logout"
+              ]
+            },
+            "description": "GET request to /api/delivery/logout (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Delivery - Orders",
+      "description": "Delivery order management",
+      "item": [
+        {
+          "name": "GET available",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/available",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                "available"
+              ]
+            },
+            "description": "GET request to /api/delivery/orders/available (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET assigned",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/assigned",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                "assigned"
+              ]
+            },
+            "description": "GET request to /api/delivery/orders/assigned (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "POST accept",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/:orderId/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                ":orderId",
+                "accept"
+              ]
+            },
+            "description": "POST request to /api/delivery/orders/:orderId/accept (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/:orderId/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                ":orderId",
+                "status"
+              ]
+            },
+            "description": "PUT request to /api/delivery/orders/:orderId/status (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"picked_up\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/:orderId/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                ":orderId",
+                "complete"
+              ]
+            },
+            "description": "POST request to /api/delivery/orders/:orderId/complete (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/orders/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "orders",
+                "history"
+              ]
+            },
+            "description": "GET request to /api/delivery/orders/history (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Delivery - Location",
+      "description": "Delivery location tracking",
+      "item": [
+        {
+          "name": "POST update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/location/update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "location",
+                "update"
+              ]
+            },
+            "description": "POST request to /api/delivery/location/update (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 40.7128,\n  \"longitude\": -74.006\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET current",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/delivery/location/current",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "delivery",
+                "location",
+                "current"
+              ]
+            },
+            "description": "GET request to /api/delivery/location/current (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "SuperAdmin - Dashboard",
+      "description": "SuperAdmin dashboard and system management",
+      "item": [
+        {
+          "name": "POST login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "login"
+              ]
+            },
+            "description": "POST request to /api/superadmin/login (Public)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@gmail.com\",\n  \"password\": \"superadmin123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "dashboard"
+              ]
+            },
+            "description": "GET request to /api/superadmin/dashboard (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "stats"
+              ]
+            },
+            "description": "GET request to /api/superadmin/stats (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "users"
+              ]
+            },
+            "description": "GET request to /api/superadmin/users (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET admins",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/admins",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "admins"
+              ]
+            },
+            "description": "GET request to /api/superadmin/admins (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "POST create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/admin/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "admin",
+                "create"
+              ]
+            },
+            "description": "POST request to /api/superadmin/admin/create (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Name\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\",\n  \"phone\": \"1234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "SuperAdmin - System Settings",
+      "description": "System configuration and settings",
+      "item": [
+        {
+          "name": "GET settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "settings"
+              ]
+            },
+            "description": "GET request to /api/superadmin/settings (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "settings"
+              ]
+            },
+            "description": "PUT request to /api/superadmin/settings (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryFee\": 50,\n  \"taxRate\": 0.18,\n  \"minOrderAmount\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "logs"
+              ]
+            },
+            "description": "GET request to /api/superadmin/logs (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "SuperAdmin - Banners",
+      "description": "Banner management for app",
+      "item": [
+        {
+          "name": "POST create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/banner/create",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "banner",
+                "create"
+              ]
+            },
+            "description": "POST request to /api/superadmin/banner/create (Protected - Requires Authentication)",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Banner Title",
+                  "type": "text"
+                },
+                {
+                  "key": "imageUrl",
+                  "value": "https://example.com/banner.jpg",
+                  "type": "text"
+                },
+                {
+                  "key": "link",
+                  "value": "/products",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET banners",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/banners",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "banners"
+              ]
+            },
+            "description": "GET request to /api/superadmin/banners (Protected - Requires Authentication)"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/banner/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "banner",
+                ":id"
+              ]
+            },
+            "description": "PUT request to /api/superadmin/banner/:id (Protected - Requires Authentication)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Banner\",\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}",
+                "type": "text",
+                "description": "JWT authentication token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/superadmin/banner/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "banner",
+                ":id"
+              ]
+            },
+            "description": "DELETE request to /api/superadmin/banner/:id (Protected - Requires Authentication)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Base URL for the API"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT authentication token (set after login)"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string",
+      "description": "Current user ID"
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "string",
+      "description": "Sample product ID for testing"
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "string",
+      "description": "Sample order ID for testing"
+    },
+    {
+      "key": "shop_id",
+      "value": "",
+      "type": "string",
+      "description": "Sample shop ID for testing"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  }
+}

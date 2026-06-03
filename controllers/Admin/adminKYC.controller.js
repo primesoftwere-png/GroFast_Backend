@@ -3,6 +3,7 @@ const DeliveryBoyKYC = require("../../models/DeliveryBoy/DeliveryBoyKYC");
 const ShopkeeperKYC = require("../../models/ShopKeeper/ShopkeeperKYC");
 const DeliveryBoy = require("../../models/DeliveryBoy/DeliveryBoy");
 const User = require("../../models/user.model");
+const Shopkeeper = require("../../models/ShopKeeper/Shopkeeper");
 
 // ==================== DELIVERY BOY KYC MANAGEMENT ====================
 
@@ -246,23 +247,44 @@ module.exports.getPendingShopkeeperKYCs = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
-    const kycs = await ShopkeeperKYC.find({ kycStatus: 'PENDING' })
-      .populate({
-        path: 'shopkeeperId',
-        populate: {
-          path: 'userId',
-          select: 'fullname email phone'
-        }
-      })
+    // Find users with pending shopkeeper status
+    const pendingUsers = await User.find({
+      role: 'admin',
+      'roleDetails.shopkeeper.status': 'pending'
+    })
+      .select('-password')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
 
-    const total = await ShopkeeperKYC.countDocuments({ kycStatus: 'PENDING' });
+    const total = await User.countDocuments({
+      role: 'admin',
+      'roleDetails.shopkeeper.status': 'pending'
+    });
+
+    const kycs = await Promise.all(
+      pendingUsers.map(async (user) => {
+        const shopkeeperProfile = await Shopkeeper.findOne({ userId: user._id });
+        let kycData = null;
+        
+        if (shopkeeperProfile) {
+          kycData = await ShopkeeperKYC.findOne({ shopkeeperId: shopkeeperProfile._id });
+        }
+
+        // Return a combined object that provides all necessary data for the admin
+        return {
+          ...user,
+          shopkeeperProfile: shopkeeperProfile || null,
+          kycDetails: kycData || null,
+          kycStatus: kycData ? kycData.kycStatus : 'NOT_SUBMITTED'
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Pending shopkeeper KYCs retrieved successfully",
+      message: "Pending shopkeepers retrieved successfully",
       data: {
         kycs,
         pagination: {
@@ -339,7 +361,8 @@ module.exports.getShopkeeperKYCDetails = async (req, res) => {
   try {
     const { kycId } = req.params;
 
-    const kyc = await ShopkeeperKYC.findById(kycId)
+    // 1. Try to find by actual KYC ID
+    let kyc = await ShopkeeperKYC.findById(kycId)
       .populate({
         path: 'shopkeeperId',
         populate: {
@@ -349,10 +372,67 @@ module.exports.getShopkeeperKYCDetails = async (req, res) => {
       })
       .populate('verifiedBy', 'fullname email');
 
+    // 2. If not found, try to find by Shopkeeper Profile ID
     if (!kyc) {
+      kyc = await ShopkeeperKYC.findOne({ shopkeeperId: kycId })
+        .populate({
+          path: 'shopkeeperId',
+          populate: {
+            path: 'userId',
+            select: 'fullname email phone'
+          }
+        })
+        .populate('verifiedBy', 'fullname email');
+    }
+
+    // 3. If still not found, try to find by Shopkeeper Profile ID or User ID
+    let shopkeeperProfile = null;
+    let user = null;
+    
+    if (!kyc) {
+      // First check if kycId is a Shopkeeper Profile ID
+      shopkeeperProfile = await Shopkeeper.findById(kycId).populate('userId', 'fullname email phone');
+      
+      // If not, check if it's a User ID
+      if (!shopkeeperProfile) {
+        shopkeeperProfile = await Shopkeeper.findOne({ userId: kycId }).populate('userId', 'fullname email phone');
+      }
+
+      if (shopkeeperProfile) {
+        kyc = await ShopkeeperKYC.findOne({ shopkeeperId: shopkeeperProfile._id })
+          .populate({
+            path: 'shopkeeperId',
+            populate: {
+              path: 'userId',
+              select: 'fullname email phone'
+            }
+          })
+          .populate('verifiedBy', 'fullname email');
+      } else {
+        // Fallback: check if the ID is just a User ID who hasn't even created a profile
+        user = await User.findById(kycId).select('fullname email phone');
+      }
+    }
+
+    if (!kyc) {
+      // If we couldn't find a KYC document, but we found a shopkeeper profile or user,
+      // return a graceful response instead of 404 so the frontend can still display basic info
+      if (shopkeeperProfile || user) {
+        return res.status(200).json({
+          success: true,
+          message: "KYC not submitted yet",
+          data: {
+            kyc: {
+              kycStatus: 'NOT_SUBMITTED',
+              shopkeeperId: shopkeeperProfile || { userId: user }
+            }
+          }
+        });
+      }
+
       return res.status(404).json({
         success: false,
-        message: "KYC not found"
+        message: "KYC or Shopkeeper not found"
       });
     }
 

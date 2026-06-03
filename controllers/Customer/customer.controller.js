@@ -24,7 +24,50 @@ module.exports.getAllProducts = async (req, res) => {
     }
 
     // Add category filter by category name (case-insensitive exact match)
-    if (category) {
+    if (category === "most_seller_product") {
+      const deliveredOrders = await Order.find({ orderStatus: { $regex: /^delivered$/i } }).select("_id");
+      const deliveredOrderIds = deliveredOrders.map(order => order._id);
+
+      const bestsellersAgg = await OrderItem.aggregate([
+        { $match: { orderId: { $in: deliveredOrderIds }, productId: { $ne: null } } },
+        { $group: { _id: "$productId", totalSold: { $sum: "$quantity" } } },
+        { $sort: { totalSold: -1 } }
+      ]);
+      
+      const bestsellerProductIds = bestsellersAgg.map(item => item._id);
+      
+      if (bestsellerProductIds.length > 0) {
+        query._id = { $in: bestsellerProductIds };
+      }
+
+      const totalDocs = await productModel.countDocuments(query);
+      const totalPages = Math.ceil(totalDocs / limitNum);
+
+      const matchingProducts = await productModel.find(query).select("_id");
+      const matchingProductIds = matchingProducts.map(p => p._id.toString());
+
+      const sortedMatchingIds = bestsellerProductIds.filter(id => 
+        matchingProductIds.includes(id.toString())
+      );
+
+      const paginatedIds = sortedMatchingIds.slice(skip, skip + limitNum);
+
+      const productsUnsorted = await productModel
+        .find({ _id: { $in: paginatedIds } })
+        .populate("productCategory")
+        .populate({ path: "createdBy", select: "fullname email role" });
+
+      const products = paginatedIds
+        .map(id => productsUnsorted.find(p => p._id.toString() === id.toString()))
+        .filter(Boolean);
+
+      return res.status(200).json({
+        success: true,
+        pagination: { page: pageNum, limit: limitNum, totalDocs, totalPages },
+        data: products,
+      });
+
+    } else if (category) {
       const categoryDoc = await Category.findOne({ 
         categoryName: { $regex: new RegExp(`^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         status: 'active'
@@ -92,7 +135,7 @@ module.exports.getBestsellerProducts = async (req, res) => {
     // Aggregate order items to find most sold products
     // Only consider delivered orders
     const deliveredOrders = await Order.find({ 
-      orderStatus: 'delivered' 
+      orderStatus: { $regex: /^delivered$/i }
     }).select('_id');
 
     const deliveredOrderIds = deliveredOrders.map(order => order._id);
@@ -364,6 +407,54 @@ module.exports.getCategoriesWithProductCount = async (req, res) => {
   }
 };
 
+// ✅ Get perfectly separated categories (parents with nested children)
+module.exports.getStructuredCategories = async (req, res) => {
+  try {
+    // Fetch all active categories
+    const categories = await Category.find({ status: 'active' }).sort({ categoryName: 1 }).lean();
+
+    // Get product count for each category
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (category) => {
+        const productCount = await productModel.countDocuments({
+          productCategory: category._id
+        });
+        return {
+          ...category,
+          productCount
+        };
+      })
+    );
+
+    // Perfectly separate parents and children
+    const parents = categoriesWithCount.filter(c => c.categoryType === 'parent' || !c.parentCategoryId);
+    const children = categoriesWithCount.filter(c => c.categoryType === 'child' || !!c.parentCategoryId);
+
+    // Map children into their respective parents to form an array
+    const structuredCategories = parents.map(parent => {
+      const parentChildren = children.filter(child => 
+        child.parentCategoryId && child.parentCategoryId.toString() === parent._id.toString()
+      );
+      
+      return {
+        ...parent,
+        children: parentChildren
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Categories fetched successfully",
+      data: structuredCategories
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching categories",
+      error: error.message,
+    });
+  }
+};
 
 // ==================== ADDRESS MANAGEMENT APIs ====================
 
@@ -381,6 +472,8 @@ module.exports.addAddress = async (req, res) => {
       pincode,
       latitude,
       longitude,
+      lan,
+      lng,
       isDefault
     } = req.body;
 
@@ -432,6 +525,8 @@ module.exports.addAddress = async (req, res) => {
       pincode,
       latitude: latitude || null,
       longitude: longitude || null,
+      lan: lan || null,
+      lng: lng || null,
       isDefault: shouldBeDefault
     });
 
@@ -555,6 +650,8 @@ module.exports.updateAddress = async (req, res) => {
       pincode,
       latitude,
       longitude,
+      lan,
+      lng,
       isDefault
     } = req.body;
 
@@ -602,6 +699,8 @@ module.exports.updateAddress = async (req, res) => {
     if (pincode) address.pincode = pincode;
     if (latitude !== undefined) address.latitude = latitude;
     if (longitude !== undefined) address.longitude = longitude;
+    if (lan !== undefined) address.lan = lan;
+    if (lng !== undefined) address.lng = lng;
     if (isDefault !== undefined) address.isDefault = isDefault;
 
     address.updatedAt = Date.now();

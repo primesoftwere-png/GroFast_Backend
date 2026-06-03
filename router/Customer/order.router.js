@@ -13,13 +13,17 @@ router.post('/convert-cart-to-order', authMiddleware.userMiddlewere, orderContro
 
 // 2. Get Customer Orders
 router.get('/my-orders', authMiddleware.userMiddlewere, orderController.getCustomerOrders);
+router.get('/categorized', orderController.getCategorizedOrders);
+router.get('/categorized/:userId', orderController.getCategorizedOrders);
 
 // 3. Get Order Details
+router.get('/recent/:orderToken', orderController.getOrderByToken);
 router.get('/:orderId', authMiddleware.userMiddlewere, orderController.getOrderDetails);
 
 console.log('✅ Real-time order flow routes registered:');
 console.log('   - POST /create - Create new order');
 console.log('   - GET /my-orders - Get customer orders');
+console.log('   - GET /recent/:orderToken - Get order by token');
 console.log('   - GET /:orderId - Get order details');
 
 module.exports = router;

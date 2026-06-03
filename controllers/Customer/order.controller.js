@@ -2,9 +2,44 @@
 // 🚀 REAL-TIME ORDER FLOW - API Controllers
 
 const Order = require('../../models/Customer/Order');
+const OrderItem = require('../../models/Customer/OrderItem');
 const User = require('../../models/user.model');
 const Cart = require('../../models/Customer/Cart');
 const CustomerAddress = require('../../models/Customer/CustomerAddress');
+const Notification = require('../../models/Customer/Notification');
+const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
+
+async function resolveShopkeeperTarget(shopId) {
+  let shopUser = await User.findById(shopId);
+  let shopkeeperProfile = null;
+
+  if (!shopUser) {
+    shopkeeperProfile = await Shopkeeper.findById(shopId).select('_id userId');
+    if (shopkeeperProfile?.userId) {
+      shopUser = await User.findById(shopkeeperProfile.userId);
+    }
+  }
+
+  if (!shopUser) {
+    return null;
+  }
+
+  if (!shopkeeperProfile) {
+    shopkeeperProfile = await Shopkeeper.findOne({ userId: shopUser._id }).select('_id userId');
+  }
+
+  const roomIds = [
+    shopUser._id.toString(),
+    shopkeeperProfile?._id?.toString()
+  ].filter(Boolean);
+
+  return {
+    user: shopUser,
+    profile: shopkeeperProfile,
+    userId: shopUser._id,
+    roomIds: [...new Set(roomIds)]
+  };
+}
 
 /**
  * 1. CREATE ORDER (API)
@@ -34,6 +69,11 @@ module.exports.createOrder = async (req, res) => {
       });
     }
 
+    // Ensure payment method is uppercase to match Mongoose enum ('COD', 'ONLINE', 'WALLET')
+    paymentMethod = paymentMethod.toUpperCase();
+
+    let ordersToCreate = [];
+
     // If items not provided, fetch from cart
     if (!items || items.length === 0) {
       const cart = await Cart.findOne({ userId: userId }).populate('products.productId');
@@ -45,174 +85,295 @@ module.exports.createOrder = async (req, res) => {
         });
       }
 
-      // Extract items and calculate totals from cart
-      items = cart.products.map(item => ({
-        productId: item.productId._id,
-        productName: item.productId.productName,
-        quantity: item.quantity,
-        price: item.productId.productPrice,
-        totalPrice: item.quantity * item.productId.productPrice
-      }));
-
-      // Get shopId from first item's createdBy field (assuming all items are from same shop)
-      if (!shopId && cart.products[0].productId.createdBy) {
-        shopId = cart.products[0].productId.createdBy;
-      }
-
-      console.log('Cart data extracted:', {
-        itemsCount: items.length,
-        shopId: shopId,
-        subtotal: items.reduce((sum, item) => sum + item.totalPrice, 0)
-      });
-
-      // Calculate totals if not provided
-      if (!subtotal) {
-        subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-      }
-      if (!deliveryCharge) {
-        deliveryCharge = 0; // Default delivery charge
-      }
-      if (!discountAmount) {
-        discountAmount = 0;
-      }
-      if (!taxAmount) {
-        taxAmount = cart.totalGST || 0;
-      }
-      if (!totalAmount) {
-        totalAmount = subtotal + deliveryCharge + taxAmount - discountAmount;
-      }
-    }
-
-    // Final validation
-    if (!shopId || !items || items.length === 0) {
-      console.error('Order creation failed - missing data:', {
-        shopId: shopId,
-        shopIdType: typeof shopId,
-        itemsCount: items ? items.length : 0
-      });
-      return res.status(400).json({
-        success: false,
-        message: 'Unable to create order. Shop or items information missing.'
-      });
-    }
-
-    // Verify shop exists
-    console.log('Looking for shop with ID:', shopId);
-    const shop = await User.findById(shopId);
-    console.log('Shop found:', shop ? { id: shop._id, role: shop.role, name: shop.fullname } : 'null');
-    
-    if (!shop) {
-      // If shop not found, try to find any active admin as fallback
-      console.log('Shop not found, looking for fallback admin...');
-      const fallbackShop = await User.findOne({ role: 'admin', accountStatus: 'active' });
+      // Filter out products that no longer exist in the database
+      const validProducts = cart.products.filter(item => item && item.productId);
       
-      if (fallbackShop) {
-        console.log('Using fallback shop:', fallbackShop._id);
-        shopId = fallbackShop._id;
-      } else {
-        return res.status(404).json({
+      if (validProducts.length === 0) {
+        return res.status(400).json({
           success: false,
-          message: 'Shop not found. The product creator may have been deleted.',
-          debug: {
-            originalShopId: shopId,
-            suggestion: 'Please contact support or clear your cart and add products again.'
-          }
+          message: 'All products in your cart are no longer available. Please clear your cart and try again.'
+        });
+      }
+
+      // Group items by shopId
+      const itemsByShop = {};
+      for (const item of validProducts) {
+        const productShopId = item.productId.createdBy.toString();
+        if (!itemsByShop[productShopId]) {
+          itemsByShop[productShopId] = {
+            shopId: productShopId,
+            items: [],
+            subtotal: 0,
+            taxAmount: 0
+          };
+        }
+        
+        const itemTotal = item.quantity * item.productId.productPrice;
+        itemsByShop[productShopId].items.push({
+          productId: item.productId._id,
+          productName: item.productId.productName,
+          quantity: item.quantity,
+          price: item.productId.productPrice,
+          totalPrice: itemTotal
+        });
+        
+        itemsByShop[productShopId].subtotal += itemTotal;
+        itemsByShop[productShopId].taxAmount += (itemTotal * 18) / 100; // Standard 18% GST used in cart
+      }
+
+      // Build order payloads for each shop
+      for (const [sId, shopData] of Object.entries(itemsByShop)) {
+        ordersToCreate.push({
+          shopId: sId,
+          items: shopData.items,
+          subtotal: shopData.subtotal,
+          taxAmount: shopData.taxAmount,
+          deliveryCharge: deliveryCharge || 0, 
+          discountAmount: 0, 
+          totalAmount: shopData.subtotal + (deliveryCharge || 0) + shopData.taxAmount
         });
       }
     } else {
-      // Verify it's a shop/admin account
-      if (shop.role !== 'admin' && shop.role !== 'superadmin') {
+      // Direct single shop order (e.g. Buy Now)
+      if (!shopId) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid shop account'
+          message: 'Unable to create order. Shop information missing.'
         });
       }
+      ordersToCreate.push({
+        shopId: shopId,
+        items: items,
+        subtotal: subtotal || items.reduce((sum, item) => sum + item.totalPrice, 0),
+        taxAmount: taxAmount || 0,
+        deliveryCharge: deliveryCharge || 0,
+        discountAmount: discountAmount || 0,
+        totalAmount: totalAmount || (subtotal || items.reduce((sum, item) => sum + item.totalPrice, 0)) + (deliveryCharge || 0) + (taxAmount || 0) - (discountAmount || 0)
+      });
     }
 
     // Verify delivery address
-    const address = await CustomerAddress.findById(deliveryAddressId);
+    let address = null;
+    try {
+      if (deliveryAddressId.match(/^[0-9a-fA-F]{24}$/)) {
+        address = await CustomerAddress.findById(deliveryAddressId);
+      }
+    } catch (err) {
+      console.error('Invalid deliveryAddressId format');
+    }
+
     if (!address || address.customerId.toString() !== userId.toString()) {
       return res.status(404).json({
         success: false,
-        message: 'Delivery address not found'
+        message: 'Delivery address not found or does not belong to you'
       });
     }
 
-    // Generate unique order token
-    const orderToken = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-    // Generate 4-digit OTP for pickup
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-
-    // Create order
-    const order = await Order.create({
-      orderToken,
-      customerId: userId,
-      shopId,
-      deliveryAddressId,
-      orderStatus: 'PENDING',
-      paymentMethod,
-      paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
-      items,
-      subtotal,
-      deliveryCharge: deliveryCharge || 0,
-      discountAmount: discountAmount || 0,
-      taxAmount: taxAmount || 0,
-      totalAmount,
-      codAmount: paymentMethod === 'COD' ? totalAmount : 0,
-      otp,
-      otpVerified: false
-    });
-
-    // Populate order details
-    const populatedOrder = await Order.findById(order._id)
-      .populate('customerId', 'fullname phone email')
-      .populate('shopId', 'fullname phone email shopName address')
-      .populate('deliveryAddressId');
-
-    console.log(`\n✓ ORDER CREATED: ${order.orderNumber}`);
-    console.log(`Customer: ${populatedOrder.customerId.fullname}`);
-    console.log(`Shop: ${populatedOrder.shopId.shopName || populatedOrder.shopId.fullname}`);
-    console.log(`Total: ₹${totalAmount}`);
-    console.log(`Payment: ${paymentMethod}`);
-
-    // Emit to shopkeeper via Socket.IO
+    const createdOrders = [];
     const io = req.app.get('io');
-    if (io) {
-      io.to(shopId.toString()).emit('new-order', {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        orderToken: order.orderToken,
-        customerName: populatedOrder.customerId.fullname,
-        customerPhone: populatedOrder.customerId.phone,
-        deliveryAddress: populatedOrder.deliveryAddressId,
-        items: order.items,
-        totalAmount: order.totalAmount,
-        paymentMethod: order.paymentMethod,
-        status: 'PENDING',
-        createdAt: order.createdAt
+
+    // Create an order for each shop
+    for (let orderData of ordersToCreate) {
+      // Verify shop exists
+      const shopTarget = await resolveShopkeeperTarget(orderData.shopId);
+      const shop = shopTarget?.user;
+      if (!shop || (shop.role !== 'admin' && shop.role !== 'superadmin')) {
+        console.warn(`Invalid or missing shop ${orderData.shopId}, skipping order for these items.`);
+        continue;
+      }
+      const normalizedShopId = shopTarget.userId;
+
+      // Generate unique order tokens and OTPs
+      const orderToken = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+      // Create order
+      const order = await Order.create({
+        orderToken,
+        customerId: userId,
+        shopId: normalizedShopId,
+        deliveryAddressId,
+        orderStatus: 'PENDING',
+        paymentMethod,
+        paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
+        items: orderData.items,
+        subtotal: orderData.subtotal,
+        deliveryCharge: orderData.deliveryCharge,
+        discountAmount: orderData.discountAmount,
+        taxAmount: orderData.taxAmount,
+        totalAmount: orderData.totalAmount,
+        codAmount: paymentMethod === 'COD' ? orderData.totalAmount : 0,
+        otp,
+        otpVerified: false
       });
 
-      console.log(`✓ Emitted new-order to shopkeeper: ${shopId}`);
+      if (order.items && order.items.length > 0) {
+        try {
+          await OrderItem.insertMany(
+            order.items.map((item) => {
+              const unitPrice = item.price ?? item.unitPrice ?? item.productPrice ?? 0;
+              const quantity = item.quantity || 1;
+
+              return {
+                orderId: order._id,
+                productId: item.productId,
+                productName: item.productName,
+                quantity,
+                unitPrice,
+                discountAmount: 0,
+                totalPrice: item.totalPrice ?? unitPrice * quantity
+              };
+            })
+          );
+        } catch (itemError) {
+          console.error(`Failed to sync order items for order ${order._id}:`, itemError.message);
+        }
+      }
+
+      // Populate order details for socket emission
+      const populatedOrder = await Order.findById(order._id)
+        .populate('customerId', 'fullname phone email')
+        .populate('shopId', 'fullname phone email shopName address')
+        .populate('deliveryAddressId');
+
+      console.log(`\n✓ ORDER CREATED: ${order.orderNumber}`);
+      console.log(`Customer: ${populatedOrder.customerId.fullname}`);
+      console.log(`Shop: ${populatedOrder.shopId.shopName || populatedOrder.shopId.fullname}`);
+      console.log(`Total: ₹${order.totalAmount}`);
+
+      // Get populated items to match getOrders structure for frontend
+      let formattedItems = [];
+      try {
+        const orderItems = await OrderItem.find({ orderId: order._id })
+          .populate('productId', 'productName productImage productPrice');
+          
+        if (orderItems && orderItems.length > 0) {
+          formattedItems = orderItems;
+        } else {
+          formattedItems = (order.items || []).map((item) => ({
+            _id: item._id,
+            orderId: order._id,
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            totalPrice: item.totalPrice
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching order items for socket payload:', err.message);
+        formattedItems = order.items || [];
+      }
+
+      // Emit to shopkeeper via Socket.IO
+      if (io) {
+        const orderEventPayload = {
+          ...populatedOrder.toObject(),
+          items: formattedItems
+        };
+        
+        shopTarget.roomIds.forEach(roomId => {
+          io.to(roomId).emit('new-order', orderEventPayload);
+          io.to(roomId).emit('receiveOrderRequest', orderEventPayload);
+        });
+        
+        console.log(`\n========================================`);
+        console.log(`🚀 SOCKET.IO EMISSION DETAILS`);
+        console.log(`========================================`);
+        console.log(`Event: 'new-order' and 'receiveOrderRequest'`);
+        console.log(`Target Shop ID (Original): ${orderData.shopId}`);
+        console.log(`Target Socket Rooms (Shopkeeper IDs):`, shopTarget.roomIds);
+        console.log(`Order ID: ${order._id}`);
+        console.log(`========================================\n`);
+      }
+
+      // 🔔 Save persistent notification for shopkeeper in database
+      try {
+        const itemsSummary = order.items.map(i => `${i.productName} x${i.quantity}`).join(', ');
+        const notificationTitle = `🛒 New Order #${order.orderNumber}`;
+        const notificationBody = `New order from ${populatedOrder.customerId.fullname} - ${itemsSummary} | Total: ₹${order.totalAmount} | Payment: ${order.paymentMethod}`;
+
+        const savedNotification = await Notification.create({
+          userId: normalizedShopId,
+          notificationType: 'order',
+          title: notificationTitle,
+          body: notificationBody,
+          dataJson: JSON.stringify({
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            orderToken: order.orderToken,
+            customerName: populatedOrder.customerId.fullname,
+            customerPhone: populatedOrder.customerId.phone,
+            totalAmount: order.totalAmount,
+            paymentMethod: order.paymentMethod,
+            itemsCount: order.items.length,
+            status: 'PENDING'
+          }),
+          isRead: false
+        });
+
+        console.log(`✓ Notification saved for shopkeeper: ${orderData.shopId}`);
+
+        // Emit real-time notification event to shopkeeper's notification panel
+        if (io) {
+          io.to(shopTarget.roomIds).emit('notification', {
+            _id: savedNotification._id,
+            notificationType: 'order',
+            title: notificationTitle,
+            body: notificationBody,
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            orderToken: order.orderToken,
+            customerName: populatedOrder.customerId.fullname,
+            totalAmount: order.totalAmount,
+            paymentMethod: order.paymentMethod,
+            isRead: false,
+            timestamp: new Date()
+          });
+          console.log(`✓ Emitted notification event to shopkeeper: ${orderData.shopId}`);
+        }
+      } catch (notifError) {
+        // Don't fail the order creation if notification saving fails
+        console.error(`⚠ Failed to save notification for shopkeeper ${orderData.shopId}:`, notifError.message);
+      }
+
+      createdOrders.push(order);
     }
 
-    // Clear cart after order creation
-    await Cart.findOneAndUpdate(
-      { userId: userId },
-      { products: [], totalPrice: 0, totalGST: 0 }
-    );
+    if (createdOrders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Could not create any valid orders from the items provided.'
+      });
+    }
 
+    // Clear cart after order creation (if we were converting cart)
+    if (!items || items.length === 0) {
+      await Cart.findOneAndUpdate(
+        { userId: userId },
+        { products: [], totalPrice: 0, totalGST: 0 }
+      );
+    }
+
+    // Return response containing the first order's essential info to maintain frontend compatibility,
+    // plus the full array of created orders if the frontend wants to handle multiple.
     res.status(201).json({
       success: true,
-      message: 'Order created successfully',
+      message: createdOrders.length > 1 ? `Successfully split cart into ${createdOrders.length} separate orders for different shops.` : 'Order created successfully',
       data: {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        orderToken: order.orderToken,
-        status: order.orderStatus,
-        totalAmount: order.totalAmount,
-        paymentMethod: order.paymentMethod,
-        estimatedDeliveryTime: '30-40 mins'
+        orderId: createdOrders[0]._id,
+        orderNumber: createdOrders[0].orderNumber,
+        orderToken: createdOrders[0].orderToken,
+        status: createdOrders[0].orderStatus,
+        totalAmount: createdOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+        paymentMethod: createdOrders[0].paymentMethod,
+        estimatedDeliveryTime: '30-40 mins',
+        orders: createdOrders.map(o => ({
+          orderId: o._id,
+          orderNumber: o.orderNumber,
+          shopId: o.shopId,
+          totalAmount: o.totalAmount
+        }))
       }
     });
 
@@ -303,6 +464,48 @@ module.exports.verifyOtp = async (req, res) => {
       console.log(`✓ Notified customer: ${order.customerId._id}`);
     }
 
+    // 🔔 Save persistent notification for shopkeeper (works even if shopkeeper is offline)
+    try {
+      const notifTitle = `📦 Order Picked Up #${order.orderNumber}`;
+      const notifBody = `Order #${order.orderNumber} has been picked up by the delivery partner. Customer: ${order.customerId.fullname} | Total: ₹${order.totalAmount}`;
+
+      const savedNotif = await Notification.create({
+        userId: order.shopId._id,
+        notificationType: 'order',
+        title: notifTitle,
+        body: notifBody,
+        dataJson: JSON.stringify({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          status: 'PICKED_UP',
+          customerName: order.customerId.fullname,
+          totalAmount: order.totalAmount,
+          pickedUpAt: order.pickedUpAt
+        }),
+        isRead: false
+      });
+
+      console.log(`✓ Notification saved for shopkeeper: ${order.shopId._id}`);
+
+      if (io) {
+        io.to(order.shopId._id.toString()).emit('notification', {
+          _id: savedNotif._id,
+          notificationType: 'order',
+          title: notifTitle,
+          body: notifBody,
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'PICKED_UP',
+          isRead: false,
+          timestamp: new Date()
+        });
+        console.log(`✓ Emitted notification event to shopkeeper: ${order.shopId._id}`);
+      }
+    } catch (notifError) {
+      console.error(`⚠ Failed to save notification for shopkeeper:`, notifError.message);
+    }
+
     res.json({
       success: true,
       message: 'OTP verified successfully. Order picked up.',
@@ -376,6 +579,47 @@ module.exports.markInTransit = async (req, res) => {
         message: 'Your order is on the way!',
         timestamp: new Date()
       });
+    }
+
+    // 🔔 Save persistent notification for shopkeeper (works even if shopkeeper is offline)
+    try {
+      const notifTitle = `🚚 Order In Transit #${order.orderNumber}`;
+      const notifBody = `Order #${order.orderNumber} is now in transit to the customer. Customer: ${order.customerId.fullname} | Total: ₹${order.totalAmount}`;
+
+      const savedNotif = await Notification.create({
+        userId: order.shopId,
+        notificationType: 'delivery',
+        title: notifTitle,
+        body: notifBody,
+        dataJson: JSON.stringify({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          status: 'IN_TRANSIT',
+          customerName: order.customerId.fullname,
+          totalAmount: order.totalAmount
+        }),
+        isRead: false
+      });
+
+      console.log(`✓ Notification saved for shopkeeper: ${order.shopId}`);
+
+      if (io) {
+        io.to(order.shopId.toString()).emit('notification', {
+          _id: savedNotif._id,
+          notificationType: 'delivery',
+          title: notifTitle,
+          body: notifBody,
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'IN_TRANSIT',
+          isRead: false,
+          timestamp: new Date()
+        });
+        console.log(`✓ Emitted notification event to shopkeeper: ${order.shopId}`);
+      }
+    } catch (notifError) {
+      console.error(`⚠ Failed to save notification for shopkeeper:`, notifError.message);
     }
 
     res.json({
@@ -475,6 +719,50 @@ module.exports.markDelivered = async (req, res) => {
       console.log(`✓ Notified customer and shopkeeper`);
     }
 
+    // 🔔 Save persistent notification for shopkeeper (works even if shopkeeper is offline)
+    try {
+      const notifTitle = `✅ Order Delivered #${order.orderNumber}`;
+      const notifBody = `Order #${order.orderNumber} has been delivered successfully! Customer: ${order.customerId.fullname} | Total: ₹${order.totalAmount} | Payment: ${order.paymentMethod}`;
+
+      const savedNotif = await Notification.create({
+        userId: order.shopId._id,
+        notificationType: 'order',
+        title: notifTitle,
+        body: notifBody,
+        dataJson: JSON.stringify({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          status: 'DELIVERED',
+          customerName: order.customerId.fullname,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          deliveredAt: order.deliveredAt
+        }),
+        isRead: false
+      });
+
+      console.log(`✓ Notification saved for shopkeeper: ${order.shopId._id}`);
+
+      if (io) {
+        io.to(order.shopId._id.toString()).emit('notification', {
+          _id: savedNotif._id,
+          notificationType: 'order',
+          title: notifTitle,
+          body: notifBody,
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'DELIVERED',
+          totalAmount: order.totalAmount,
+          isRead: false,
+          timestamp: new Date()
+        });
+        console.log(`✓ Emitted notification event to shopkeeper: ${order.shopId._id}`);
+      }
+    } catch (notifError) {
+      console.error(`⚠ Failed to save notification for shopkeeper:`, notifError.message);
+    }
+
     res.json({
       success: true,
       message: 'Order delivered successfully',
@@ -545,6 +833,41 @@ module.exports.getOrderDetails = async (req, res) => {
 };
 
 /**
+ * Get order by token
+ */
+module.exports.getOrderByToken = async (req, res) => {
+  try {
+    const { orderToken } = req.params;
+
+    const order = await Order.findOne({ orderToken })
+      .populate('customerId', 'fullname phone email')
+      .populate('shopId', 'fullname phone email shopName address')
+      .populate('deliveryBoyId', 'fullname phone')
+      .populate('deliveryAddressId');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: order
+    });
+
+  } catch (error) {
+    console.error('Error getting order by token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get order details',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get all orders for customer
  */
 module.exports.getCustomerOrders = async (req, res) => {
@@ -578,6 +901,98 @@ module.exports.getCustomerOrders = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get orders',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get categorized orders (recent vs history)
+ */
+module.exports.getCategorizedOrders = async (req, res) => {
+  try {
+    // Accept userId from path params, query params, or token
+    const userIdParam = req.params.userId || req.query.userId || (req.user && req.user._id);
+    
+    if (!userIdParam) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId is required. Pass it as path param: /categorized/:userId'
+      });
+    }
+
+    // Convert string userId to mongoose ObjectId for proper matching
+    const mongoose = require('mongoose');
+    let userId;
+    try {
+      userId = new mongoose.Types.ObjectId(userIdParam);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid userId format'
+      });
+    }
+
+    const userRole = req.query.role || (req.user && req.user.role) || 'user';
+
+    // Dynamically filter based on user role
+    let query = {};
+    if (userRole === 'admin') {
+      query.shopId = userId; // Shopkeepers see orders for their shop
+    } else if (userRole === 'deliveryBoy') {
+      query.deliveryBoyId = userId; // Delivery boys see their assigned orders
+    } else if (userRole === 'superadmin') {
+      // Superadmin sees all orders, no filter needed
+      query = {}; 
+    } else {
+      // For customers - find all orders where this user is the customer
+      query.customerId = userId;
+    }
+
+    const orders = await Order.find(query)
+      .populate('shopId', 'fullname shopName phone')
+      .populate('customerId', 'fullname phone email')
+      .populate('deliveryBoyId', 'fullname phone')
+      .populate('deliveryAddressId')
+      .sort({ createdAt: -1 });
+
+    const recent = [];
+    const history = [];
+
+    const historyStatuses = ['DELIVERED', 'CANCELLED'];
+
+    orders.forEach(order => {
+      const status = (order.orderStatus || '').toUpperCase();
+      const orderObj = order.toObject(); // Convert to plain JSON object to add dynamic properties
+
+      if (historyStatuses.includes(status)) {
+        history.push(orderObj);
+      } else {
+        // Add dynamic properties for frontend tracking button
+        orderObj.showTrackingButton = true;
+        orderObj.actionButton = {
+          text: "Track Order",
+          url: `/tracking/${orderObj.orderToken || orderObj._id}`
+        };
+        
+        recent.push(orderObj);
+      }
+    });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      data: {
+        recent,
+        history
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting categorized orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get categorized orders',
       error: error.message
     });
   }

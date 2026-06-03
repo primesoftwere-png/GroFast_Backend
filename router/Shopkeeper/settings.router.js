@@ -10,6 +10,7 @@ router.use(authMiddleware.userMiddlewere);
 // Settings
 router.get('/settings', settingsController.getSettings);
 router.put('/settings/business-hours', settingsController.updateBusinessHours);
+router.put('/settings/location', settingsController.updateShopLocation);
 router.put('/settings/bank-details', settingsController.updateBankDetails);
 router.put('/settings/profile', settingsController.updateProfile);
 router.post('/settings/change-password', settingsController.changePassword);

@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
-    "seed:superadmin": "node scripts/seedAdmin.js"
+    "seed": "node scripts/seedAdmin.js"
   },
   "author": "",
   "license": "ISC",

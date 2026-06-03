@@ -2,17 +2,23 @@
 const express = require('express');
 const router = express.Router();
 
-const adminRoutes = require('./admin.router'); // Assuming admin.router.js exists for other admin routes
-const shopkeeperRoutes = require('./shopkeeperRoutes'); // Shopkeeper-specific routes
-const kycRoutes = require('./kycRoutes'); // KYC management routes
-const testDataController = require('../../controllers/Admin/testData.controller'); // Test data helper
+const adminRoutes = require('./admin.router');
+const adminDashboardRoutes = require('./adminDashboard.router');
+const adminManagementRoutes = require('./adminManagement.router');
+const adminExtendedRoutes = require('./adminExtended.router'); // Orders, Products, Coupons, Payments, Wallets, Withdraw, Reports, Settings, Support
+const shopkeeperRoutes = require('./shopkeeperRoutes');
+const kycRoutes = require('./kycRoutes');
+const testDataController = require('../../controllers/Admin/testData.controller');
 
 // Mount sub-routes
-router.use('/', adminRoutes); // e.g., /api/admin/login, /api/admin/dashboard
-router.use('/shopkeeper', shopkeeperRoutes); // e.g., /api/admin/shopkeeper/register
-router.use('/kyc', kycRoutes); // e.g., /api/admin/kyc/delivery-boy/pending, /api/admin/kyc/shopkeeper/pending
+router.use('/', adminRoutes);
+router.use('/', adminDashboardRoutes);
+router.use('/', adminManagementRoutes);
+router.use('/', adminExtendedRoutes); // All new extended APIs
+router.use('/shopkeeper', shopkeeperRoutes);
+router.use('/kyc', kycRoutes);
 
-// Test data helper endpoint (for development/testing)
-router.post('/test/create-orders', testDataController.createTestOrders); // e.g., /api/admin/test/create-orders
+// Test data helper endpoint
+router.post('/test/create-orders', testDataController.createTestOrders);
 
 module.exports = router;

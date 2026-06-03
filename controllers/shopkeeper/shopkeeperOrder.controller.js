@@ -5,12 +5,26 @@ const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 const Shop = require('../../models/ShopKeeper/Shop');
 const ShopkeeperWallet = require('../../models/ShopKeeper/ShopkeeperWallet');
 const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
-const { 
-  emitOrderAcceptedToCustomer,
-  emitDeliveryRequestToNearbyDeliveryBoys,
-  emitOrderReady,
-  emitOrderCancelled
-} = require('../../socket/orderFlowSocket');
+const Notification = require('../../models/Customer/Notification');
+
+const getOrderItemsForResponse = async (order) => {
+  const orderItems = await OrderItem.find({ orderId: order._id })
+    .populate('productId', 'productName productImage productPrice');
+
+  if (orderItems.length > 0) {
+    return orderItems;
+  }
+
+  return (order.items || []).map((item) => ({
+    _id: item._id,
+    orderId: order._id,
+    productId: item.productId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.price,
+    totalPrice: item.totalPrice
+  }));
+};
 
 // ✅ Get All Orders for Shopkeeper
 module.exports.getOrders = async (req, res) => {
@@ -50,7 +64,7 @@ module.exports.getOrders = async (req, res) => {
     };
     
     if (status) {
-      const validStatuses = ['PENDING', 'ACCEPTED', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+      const validStatuses = ['PENDING', 'CONFIRMED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
       if (validStatuses.includes(status.toUpperCase())) {
         query.orderStatus = status.toUpperCase();
       }
@@ -88,9 +102,8 @@ module.exports.getOrders = async (req, res) => {
     // Get order items for each order and include pickup OTP
     const ordersWithItems = await Promise.all(
       orders.map(async (order) => {
-        const items = await OrderItem.find({ orderId: order._id })
-          .populate('productId', 'productName productImage productPrice');
-        
+        const items = await getOrderItemsForResponse(order);
+
         const orderObj = order.toObject();
         
         // Include pickup OTP in response if it exists
@@ -172,7 +185,11 @@ module.exports.getPendingOrders = async (req, res) => {
 
     // shopId in Order model references User._id (shopkeeper's userId)
     const orders = await Order.find({
-      shopId: userId,
+      $or: [
+        { shopId: userId },
+        { shopId: shopkeeper._id },
+        { shopId: shopkeeper.userId }
+      ],
       orderStatus: 'PENDING'
     })
       .populate('customerId', 'fullname phone email')
@@ -182,8 +199,7 @@ module.exports.getPendingOrders = async (req, res) => {
     // Get order items
     const ordersWithItems = await Promise.all(
       orders.map(async (order) => {
-        const items = await OrderItem.find({ orderId: order._id })
-          .populate('productId', 'productName productImage productPrice');
+        const items = await getOrderItemsForResponse(order);
         return {
           ...order.toObject(),
           items: items
@@ -235,7 +251,11 @@ module.exports.getOrderDetails = async (req, res) => {
     // shopId in Order model references User._id (shopkeeper's userId)
     const order = await Order.findOne({
       _id: orderId,
-      shopId: userId
+      $or: [
+        { shopId: userId },
+        { shopId: shopkeeper._id },
+        { shopId: shopkeeper.userId }
+      ]
     })
       .populate('customerId', 'fullname phone email')
       .populate('deliveryAddressId')
@@ -249,8 +269,7 @@ module.exports.getOrderDetails = async (req, res) => {
     }
 
     // Get order items
-    const items = await OrderItem.find({ orderId: order._id })
-      .populate('productId', 'productName productImage productPrice productDescription');
+    const items = await getOrderItemsForResponse(order);
 
     return res.status(200).json({
       success: true,
@@ -374,10 +393,12 @@ module.exports.acceptOrder = async (req, res) => {
 
     if (order.orderStatus !== 'PENDING') {
       console.log('❌ Cannot accept - wrong status');
+      console.log('Current status:', order.orderStatus);
       console.log('========================================');
       return res.status(400).json({
         success: false,
-        message: `Cannot accept order. Current status: ${order.orderStatus}`
+        message: `Cannot accept order. Current status: ${order.orderStatus}`,
+        hint: order.orderStatus === 'CONFIRMED' ? 'This order has already been accepted' : `Order must be in PENDING status to accept. Current status: ${order.orderStatus}`
       });
     }
 
@@ -386,7 +407,7 @@ module.exports.acceptOrder = async (req, res) => {
     const pickupOTPExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours validity
 
     // Update order status and set pickup OTP
-    order.orderStatus = 'ACCEPTED';
+    order.orderStatus = 'CONFIRMED';
     order.acceptedAt = Date.now();
     order.pickupOTP = {
       code: pickupOTPCode,
@@ -405,14 +426,16 @@ module.exports.acceptOrder = async (req, res) => {
     
     if (io) {
       // Emit to customer that order was accepted
-      emitOrderAcceptedToCustomer(io, order.customerId.toString(), {
+      io.to(order.customerId.toString()).emit('order-status', {
         orderId: order._id,
         orderNumber: order.orderNumber,
         orderToken: order.orderToken,
-        orderStatus: 'ACCEPTED',
+        orderStatus: 'CONFIRMED',
         acceptedAt: order.acceptedAt,
         message: 'Your order has been accepted by the shopkeeper'
       });
+
+      console.log(`✓ Notified customer: ${order.customerId}`);
 
       // Find nearby delivery boys and send delivery requests
       try {
@@ -423,29 +446,32 @@ module.exports.acceptOrder = async (req, res) => {
         );
 
         if (nearbyDeliveryBoys.length > 0) {
-          const deliveryBoyIds = nearbyDeliveryBoys.map(db => db.userId.toString());
-          
-          emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            orderToken: order.orderToken,
-            pickupLocation: {
-              shopName: shop.shopName,
-              address: shop.address,
-              lat: shop.location?.coordinates[1] || 0,
-              lng: shop.location?.coordinates[0] || 0
-            },
-            deliveryLocation: {
-              address: order.deliveryAddress?.address || 'Customer Address',
-              lat: order.deliveryAddress?.lat || 0,
-              lng: order.deliveryAddress?.lng || 0
-            },
-            distance: '2.5 km', // Calculate actual distance
-            estimatedEarnings: 50, // Calculate based on distance
-            expiresIn: 60 // 60 seconds to accept
+          // Emit to each nearby delivery boy
+          nearbyDeliveryBoys.forEach(db => {
+            if (db.userId) {
+              io.to(db.userId.toString()).emit('order-available', {
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                orderToken: order.orderToken,
+                pickupLocation: {
+                  shopName: shop.shopName,
+                  address: shop.address,
+                  lat: shop.location?.coordinates[1] || 0,
+                  lng: shop.location?.coordinates[0] || 0
+                },
+                deliveryLocation: {
+                  address: order.deliveryAddress?.address || 'Customer Address',
+                  lat: order.deliveryAddress?.lat || 0,
+                  lng: order.deliveryAddress?.lng || 0
+                },
+                distance: '2.5 km', // Calculate actual distance
+                estimatedEarnings: 50, // Calculate based on distance
+                expiresIn: 60 // 60 seconds to accept
+              });
+            }
           });
 
-          console.log(`✓ Delivery requests sent to ${deliveryBoyIds.length} nearby delivery boys`);
+          console.log(`✓ Delivery requests sent to ${nearbyDeliveryBoys.length} nearby delivery boys`);
         } else {
           console.log('⚠ No nearby delivery boys found');
         }
@@ -454,6 +480,46 @@ module.exports.acceptOrder = async (req, res) => {
       }
     }
     // ====================================
+
+    // 🔔 Save persistent notification for customer (works even if customer is offline)
+    try {
+      const notifTitle = `✅ Order Confirmed #${order.orderNumber}`;
+      const notifBody = `Your order #${order.orderNumber} has been confirmed by the shopkeeper! A delivery partner will be assigned soon.`;
+
+      const savedNotif = await Notification.create({
+        userId: order.customerId,
+        notificationType: 'order',
+        title: notifTitle,
+        body: notifBody,
+        dataJson: JSON.stringify({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          status: 'CONFIRMED',
+          acceptedAt: order.acceptedAt
+        }),
+        isRead: false
+      });
+
+      console.log(`✓ Notification saved for customer: ${order.customerId}`);
+
+      if (io) {
+        io.to(order.customerId.toString()).emit('notification', {
+          _id: savedNotif._id,
+          notificationType: 'order',
+          title: notifTitle,
+          body: notifBody,
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'CONFIRMED',
+          isRead: false,
+          timestamp: new Date()
+        });
+        console.log(`✓ Emitted notification event to customer: ${order.customerId}`);
+      }
+    } catch (notifError) {
+      console.error(`⚠ Failed to save notification for customer:`, notifError.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -508,7 +574,11 @@ module.exports.markReadyForPickup = async (req, res) => {
     // Find order by orderToken and shopId
     const order = await Order.findOne({
       orderToken: orderToken,
-      shopId: userId
+      $or: [
+        { shopId: userId },
+        { shopId: shopkeeper._id },
+        { shopId: shopkeeper.userId }
+      ]
     });
 
     if (!order) {
@@ -518,7 +588,7 @@ module.exports.markReadyForPickup = async (req, res) => {
       });
     }
 
-    if (order.orderStatus !== 'ACCEPTED') {
+    if (order.orderStatus !== 'CONFIRMED') {
       return res.status(400).json({
         success: false,
         message: `Cannot mark ready. Current status: ${order.orderStatus}`
@@ -533,8 +603,7 @@ module.exports.markReadyForPickup = async (req, res) => {
     const io = global.io || (req.app && req.app.get('io'));
     
     if (io) {
-      // Emit to customer
-      emitOrderReady(io, order.customerId.toString(), order.deliveryBoyId?.toString(), {
+      io.to(order.customerId.toString()).emit('order-status', {
         orderId: order._id,
         orderNumber: order.orderNumber,
         orderToken: order.orderToken,
@@ -542,6 +611,16 @@ module.exports.markReadyForPickup = async (req, res) => {
         message: 'Your order is ready for pickup by delivery partner',
         pickupOTP: order.pickupOTP
       });
+      
+      if (order.deliveryBoyId) {
+        io.to(order.deliveryBoyId.toString()).emit('order-status', {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          orderStatus: 'READY_FOR_PICKUP',
+          message: 'Order is ready for pickup at the shop'
+        });
+      }
       
       console.log('✓ Order ready events emitted via Socket.IO');
     }
@@ -599,7 +678,11 @@ module.exports.cancelOrder = async (req, res) => {
     // Find order by orderToken and shopId
     const order = await Order.findOne({
       orderToken: orderToken,
-      shopId: userId
+      $or: [
+        { shopId: userId },
+        { shopId: shopkeeper._id },
+        { shopId: shopkeeper.userId }
+      ]
     });
 
     if (!order) {
@@ -625,7 +708,7 @@ module.exports.cancelOrder = async (req, res) => {
     const io = global.io || (req.app && req.app.get('io'));
     
     if (io) {
-      emitOrderCancelled(io, order.customerId.toString(), order.deliveryBoyId?.toString(), {
+      io.to(order.customerId.toString()).emit('order-status', {
         orderId: order._id,
         orderNumber: order.orderNumber,
         orderToken: order.orderToken,
@@ -635,9 +718,61 @@ module.exports.cancelOrder = async (req, res) => {
         message: 'Your order has been cancelled by the shopkeeper'
       });
       
+      if (order.deliveryBoyId) {
+        io.to(order.deliveryBoyId.toString()).emit('order-status', {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          orderStatus: 'CANCELLED',
+          message: 'Order has been cancelled by the shopkeeper'
+        });
+      }
+      
       console.log('✓ Order cancelled events emitted via Socket.IO');
     }
     // ====================================
+
+    // 🔔 Save persistent notification for customer (works even if customer is offline)
+    try {
+      const notifTitle = `❌ Order Cancelled #${order.orderNumber}`;
+      const notifBody = `Your order #${order.orderNumber} has been cancelled by the shopkeeper. Reason: ${order.cancelReason}`;
+
+      const savedNotif = await Notification.create({
+        userId: order.customerId,
+        notificationType: 'order',
+        title: notifTitle,
+        body: notifBody,
+        dataJson: JSON.stringify({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderToken: order.orderToken,
+          status: 'CANCELLED',
+          cancelReason: order.cancelReason,
+          cancelledAt: order.cancelledAt
+        }),
+        isRead: false
+      });
+
+      console.log(`✓ Notification saved for customer: ${order.customerId}`);
+
+      if (io) {
+        io.to(order.customerId.toString()).emit('notification', {
+          _id: savedNotif._id,
+          notificationType: 'order',
+          title: notifTitle,
+          body: notifBody,
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'CANCELLED',
+          cancelReason: order.cancelReason,
+          isRead: false,
+          timestamp: new Date()
+        });
+        console.log(`✓ Emitted notification event to customer: ${order.customerId}`);
+      }
+    } catch (notifError) {
+      console.error(`⚠ Failed to save notification for customer:`, notifError.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -684,17 +819,26 @@ module.exports.getOrderStats = async (req, res) => {
     }
 
     // shopId in Order model references User._id (shopkeeper's userId)
+    const shopIdQuery = {
+      $or: [
+        { shopId: userId },
+        { shopId: shopkeeper._id },
+        { shopId: shopkeeper.userId }
+      ]
+    };
+
     // Get counts by status
-    const pending = await Order.countDocuments({ shopId: userId, orderStatus: 'PENDING' });
-    const accepted = await Order.countDocuments({ shopId: userId, orderStatus: 'ACCEPTED' });
-    const readyForPickup = await Order.countDocuments({ shopId: userId, orderStatus: 'READY_FOR_PICKUP' });
-    const outForDelivery = await Order.countDocuments({ shopId: userId, orderStatus: 'OUT_FOR_DELIVERY' });
-    const delivered = await Order.countDocuments({ shopId: userId, orderStatus: 'DELIVERED' });
-    const cancelled = await Order.countDocuments({ shopId: userId, orderStatus: 'CANCELLED' });
+    const pending = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'PENDING' });
+    const confirmed = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'CONFIRMED' });
+    const assigned = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'ASSIGNED' });
+    const pickedUp = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'PICKED_UP' });
+    const inTransit = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'IN_TRANSIT' });
+    const delivered = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'DELIVERED' });
+    const cancelled = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'CANCELLED' });
 
     // Get total revenue (delivered orders)
     const revenueResult = await Order.aggregate([
-      { $match: { shopId: userId, orderStatus: 'DELIVERED' } },
+      { $match: { ...shopIdQuery, orderStatus: 'DELIVERED' } },
       { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
     ]);
     const totalRevenue = revenueResult[0]?.totalRevenue || 0;
@@ -703,7 +847,7 @@ module.exports.getOrderStats = async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayOrders = await Order.countDocuments({
-      shopId: userId,
+      ...shopIdQuery,
       createdAt: { $gte: todayStart }
     });
 
@@ -713,12 +857,13 @@ module.exports.getOrderStats = async (req, res) => {
       data: {
         orderCounts: {
           pending: pending,
-          accepted: accepted,
-          readyForPickup: readyForPickup,
-          outForDelivery: outForDelivery,
+          confirmed: confirmed,
+          assigned: assigned,
+          pickedUp: pickedUp,
+          inTransit: inTransit,
           delivered: delivered,
           cancelled: cancelled,
-          total: pending + accepted + readyForPickup + outForDelivery + delivered + cancelled
+          total: pending + confirmed + assigned + pickedUp + inTransit + delivered + cancelled
         },
         revenue: {
           total: totalRevenue,
@@ -755,24 +900,14 @@ async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
     // Convert radius from kilometers to meters
     const radiusMeters = radiusKm * 1000;
 
-    // Find delivery boys who are:
-    // 1. Online/available
-    // 2. KYC verified
-    // 3. Within the specified radius
+    // We do not have currentLocation in DeliveryBoy schema, 
+    // so we skip the geospatial query and just return online delivery boys.
+    // In a production app, we would query the DeliveryBoyLocation model.
     const nearbyDeliveryBoys = await DeliveryBoy.find({
       isOnline: true,
       isAvailable: true,
-      kycStatus: 'approved',
-      'currentLocation.coordinates': {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [lng, lat] // [longitude, latitude]
-          },
-          $maxDistance: radiusMeters
-        }
-      }
-    }).limit(10); // Limit to 10 nearest delivery boys
+      isBlocked: false
+    }).limit(10);
 
     return nearbyDeliveryBoys;
   } catch (error) {
@@ -783,7 +918,7 @@ async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
       const availableDeliveryBoys = await DeliveryBoy.find({
         isOnline: true,
         isAvailable: true,
-        kycStatus: 'approved'
+        isBlocked: false
       }).limit(10);
       
       return availableDeliveryBoys;

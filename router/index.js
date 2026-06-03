@@ -23,6 +23,7 @@ const configureRoutes = (app) => {
 
   // User Authentication Routes
   app.use(`${apiPrefix}/user`, userRouter);
+  app.use(`${apiPrefix}/auth`, userRouter); // Alias: /api/auth/login also works for customer panel
   app.use(`${apiPrefix}/customer`, customerRouter);
   app.use(`${apiPrefix}/cart`, cartRouter);
   app.use(`${apiPrefix}/payment`, paymentRouter);
@@ -39,6 +40,7 @@ const configureRoutes = (app) => {
 
   // Direct category routes (for convenience)
   app.get(`${apiPrefix}/categories/with-count`, customerController.getCategoriesWithProductCount);
+  app.get(`${apiPrefix}/categories/structured`, customerController.getStructuredCategories);
   app.get(`${apiPrefix}/categories/:id`, customerController.getCategoryById);
   app.get(`${apiPrefix}/categories`, customerController.getAllCategories);
 

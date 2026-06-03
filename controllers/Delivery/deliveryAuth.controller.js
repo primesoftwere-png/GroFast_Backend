@@ -176,6 +176,7 @@ module.exports.registerDeliveryBoy = async (req, res) => {
 module.exports.loginDeliveryBoy = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log("email and password : ",email,password)
 
     // Validation
     if (!email || !password) {

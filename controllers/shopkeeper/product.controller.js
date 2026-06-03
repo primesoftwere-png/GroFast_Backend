@@ -60,7 +60,7 @@ module.exports.addProduct = async (req, res) => {
       productImage,
       productQuantity,
       productUnit: productUnit.trim(),
-      createdBy,
+      createdBy: req.user ? req.user._id : createdBy, // Force use of authenticated user ID
     });
     await product.save();
 

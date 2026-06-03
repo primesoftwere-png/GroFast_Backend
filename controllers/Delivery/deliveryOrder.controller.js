@@ -6,6 +6,7 @@ const DeliveryBoyWallet = require("../../models/DeliveryBoy/DeliveryBoyWallet");
 const DeliveryBoyLocation = require("../../models/DeliveryBoy/DeliveryBoyLocation");
 const DeliveryBoyNotification = require("../../models/DeliveryBoy/DeliveryBoyNotification");
 const WalletTransaction = require("../../models/DeliveryBoy/WalletTransaction");
+const { emitDeliveryBoyAssigned, cancelDeliveryRequests } = require('../../socket/orderFlowSocket');
 
 // ✅ Get Available Orders (Nearby, Filtered by Distance)
 module.exports.getAvailableOrders = async (req, res) => {
@@ -39,7 +40,7 @@ module.exports.getAvailableOrders = async (req, res) => {
 
     // Build query for available orders
     const query = {
-      orderStatus: 'confirmed',
+      orderStatus: { $in: ['CONFIRMED', 'confirmed'] }, // Support both uppercase (new) and lowercase (legacy)
       deliveryBoyId: null // Not yet assigned
     };
 
@@ -217,7 +218,7 @@ module.exports.acceptOrder = async (req, res) => {
       });
     }
 
-    if (order.orderStatus !== 'confirmed') {
+    if (!['confirmed', 'CONFIRMED'].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: `Order cannot be accepted. Current status: ${order.orderStatus}`
@@ -238,16 +239,16 @@ module.exports.acceptOrder = async (req, res) => {
       }
     }
 
-    // Assign order atomically
+    // Assign order atomically (prevent race condition between multiple delivery boys)
     const updatedOrder = await Order.findOneAndUpdate(
       { 
         _id: orderId,
         deliveryBoyId: null, // Ensure not already assigned
-        orderStatus: 'confirmed'
+        orderStatus: { $in: ['confirmed', 'CONFIRMED'] }
       },
       {
         deliveryBoyId: deliveryBoyId,
-        orderStatus: 'ready_for_pickup'
+        orderStatus: 'ASSIGNED_TO_DELIVERY'
       },
       { new: true }
     );
@@ -281,10 +282,38 @@ module.exports.acceptOrder = async (req, res) => {
       .populate('shopId', 'fullname phone')
       .populate('deliveryAddressId');
 
+    // ========== SOCKET.IO EMIT ==========
+    const io = global.io || (req.app && req.app.get('io'));
+    if (io && populatedOrder) {
+      // Notify customer & shopkeeper that delivery boy was assigned
+      emitDeliveryBoyAssigned(
+        io,
+        populatedOrder.customerId?._id?.toString() || populatedOrder.customerId?.toString(),
+        populatedOrder.shopId?._id?.toString() || populatedOrder.shopId?.toString(),
+        {
+          orderId: populatedOrder._id,
+          orderNumber: populatedOrder.orderNumber,
+          orderStatus: 'ASSIGNED_TO_DELIVERY',
+          deliveryBoy: {
+            id: deliveryBoyId.toString(),
+            name: deliveryBoy.fullName || 'Delivery Partner',
+            vehicleType: deliveryBoy.vehicleType
+          },
+          message: 'A delivery partner is on the way!'
+        }
+      );
+      // Remove this order from all delivery boys' available lists
+      cancelDeliveryRequests(io, orderId, updatedOrder.orderNumber);
+    }
+    // ====================================
+
     return res.status(200).json({
       success: true,
-      message: "Order accepted successfully",
+      message: "Order accepted successfully! Head to the shop for pickup.",
       data: {
+        orderId: populatedOrder._id,
+        orderNumber: populatedOrder.orderNumber,
+        orderStatus: populatedOrder.orderStatus,
         order: populatedOrder
       }
     });

@@ -22,7 +22,10 @@ const UserSchema = new mongoose.Schema({
   phoneVerified: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-  lastLogin: { type: Date, default: null }
+  lastLogin: { type: Date, default: null },
+  googleId: { type: String, unique: true, sparse: true },
+  otp: { type: String },
+  otpExpires: { type: Date }
 }, { 
   collection: 'users',
   timestamps: false

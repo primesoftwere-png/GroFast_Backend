@@ -3,10 +3,12 @@ const mongoose = require('mongoose');
 
 const CategorySchema = new mongoose.Schema({
   categoryName: { type: String, required: true, maxlength: 100 },
+  categoryType: { type: String, enum: ['parent', 'child'], default: 'parent' },
   parentCategoryId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Category' 
   },
+  categoryImage: { type: String },
   description: { type: String },
   status: { 
     type: String, 

@@ -7,6 +7,7 @@ const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
 const DeliveryBoyWallet = require('../../models/DeliveryBoy/DeliveryBoyWallet');
 const WalletTransaction = require('../../models/DeliveryBoy/WalletTransaction');
 const Shop = require('../../models/ShopKeeper/Shop');
+const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
 const { 
   emitDeliveryBoyAssigned,
   emitOrderOutForDelivery,
@@ -18,18 +19,18 @@ const {
 module.exports.acceptDeliveryRequest = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { orderToken } = req.body;
+    const { orderId } = req.body;  // Accept via orderId (not orderToken)
 
     console.log('========================================');
     console.log('ACCEPT DELIVERY REQUEST - DEBUG INFO');
     console.log('========================================');
     console.log('Delivery Boy userId:', userId);
-    console.log('Order token:', orderToken);
+    console.log('Order ID:', orderId);
 
-    if (!orderToken) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
-        message: 'Order token is required'
+        message: 'Order ID is required'
       });
     }
 
@@ -50,43 +51,43 @@ module.exports.acceptDeliveryRequest = async (req, res) => {
       });
     }
 
-    // Find order by token
-    const order = await Order.findOne({ orderToken: orderToken })
+    // Atomically assign the order (prevent race condition)
+    const order = await Order.findOneAndUpdate(
+      { 
+        _id: orderId, 
+        deliveryBoyId: null,
+        orderStatus: 'CONFIRMED'   // Shopkeeper has accepted (PENDING → CONFIRMED)
+      },
+      {
+        deliveryBoyId: userId,
+        deliveryBoyAssignedAt: new Date(),
+        orderStatus: 'ASSIGNED_TO_DELIVERY'
+      },
+      { new: true }
+    )
       .populate('customerId', 'fullname phone')
-      .populate('shopId', 'fullname phone')
+      .populate('shopId', 'fullname phone shopName')
       .populate('deliveryAddressId');
 
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
+      // Check why it failed
+      const existingOrder = await Order.findById(orderId);
+      if (!existingOrder) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+      if (existingOrder.deliveryBoyId) {
+        return res.status(400).json({ success: false, message: 'Order already assigned to another delivery partner' });
+      }
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot accept order. Current status: ${existingOrder.orderStatus}` 
       });
     }
-
-    // Check if order is in correct status
-    if (!['ACCEPTED', 'READY_FOR_PICKUP'].includes(order.orderStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept order. Current status: ${order.orderStatus}`
-      });
-    }
-
-    // Check if order is already assigned
-    if (order.deliveryBoyId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Order is already assigned to another delivery partner'
-      });
-    }
-
-    // Assign delivery boy to order
-    order.deliveryBoyId = userId;
-    order.deliveryBoyAssignedAt = Date.now();
-    order.orderStatus = 'ASSIGNED_TO_DELIVERY';
-    await order.save();
 
     // Mark delivery boy as busy
     deliveryBoy.isAvailable = false;
+    deliveryBoy.activeOrderId = orderId;
+    deliveryBoy.totalDeliveries = (deliveryBoy.totalDeliveries || 0) + 1;
     await deliveryBoy.save();
 
     console.log('✓ Order assigned to delivery boy successfully');
@@ -96,51 +97,67 @@ module.exports.acceptDeliveryRequest = async (req, res) => {
     const io = global.io || (req.app && req.app.get('io'));
     
     if (io) {
-      // Emit to customer and shopkeeper
-      emitDeliveryBoyAssigned(io, order.customerId.toString(), order.shopId.toString(), {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        orderToken: order.orderToken,
-        orderStatus: 'ASSIGNED_TO_DELIVERY',
-        deliveryBoy: {
-          id: userId.toString(),
-          name: deliveryBoy.fullName,
-          phone: deliveryBoy.phoneNumber,
-          vehicleType: deliveryBoy.vehicleType,
-          vehicleNumber: deliveryBoy.vehicleNumber,
-          currentLocation: deliveryBoy.currentLocation
-        },
-        estimatedPickupTime: '10 minutes'
-      });
+      const deliveryBoyData = {
+        id: userId.toString(),
+        name: deliveryBoy.fullName || req.user.fullname,
+        phone: deliveryBoy.phoneNumber || req.user.phone,
+        vehicleType: deliveryBoy.vehicleType,
+        vehicleNumber: deliveryBoy.vehicleNumber
+      };
 
-      // Cancel other pending delivery requests
-      // TODO: Track delivery requests in DeliveryRequest model
-      console.log('✓ Delivery boy assigned events emitted via Socket.IO');
+      // Notify customer
+      emitDeliveryBoyAssigned(
+        io,
+        order.customerId?._id?.toString() || order.customerId?.toString(),
+        order.shopId?._id?.toString() || order.shopId?.toString(),
+        {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          orderStatus: 'ASSIGNED_TO_DELIVERY',
+          deliveryBoy: deliveryBoyData,
+          estimatedPickupTime: '10-15 minutes',
+          message: 'A delivery partner has been assigned to your order'
+        }
+      );
+
+      // Notify ALL delivery boys that this order is taken
+      cancelDeliveryRequests(io, order._id, order.orderNumber);
+
+      console.log('✓ Socket events emitted: delivery assigned + order taken broadcast');
     }
     // ====================================
 
+    // Create notification for delivery boy
+    try {
+      await DeliveryBoyNotification.create({
+        deliveryBoyId: userId,
+        orderId: order._id,
+        title: 'Order Accepted',
+        message: `You accepted order ${order.orderNumber}. Head to the shop for pickup.`,
+        type: 'order_assigned',
+        priority: 'high'
+      });
+    } catch (notifErr) {
+      console.warn('Failed to create notification:', notifErr.message);
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'Delivery request accepted successfully',
+      message: 'Order accepted successfully! Head to the shop for pickup.',
       data: {
         orderId: order._id,
         orderNumber: order.orderNumber,
-        orderToken: order.orderToken,
         orderStatus: order.orderStatus,
-        pickupLocation: {
-          address: order.pickupAddress?.address,
-          lat: order.pickupAddress?.lat,
-          lng: order.pickupAddress?.lng
-        },
-        deliveryLocation: {
-          address: order.deliveryAddress?.address,
-          lat: order.deliveryAddress?.lat,
-          lng: order.deliveryAddress?.lng
+        pickupOTPRequired: true,
+        shop: {
+          name: order.shopId?.shopName || order.shopId?.fullname,
+          phone: order.shopId?.phone
         },
         customer: {
           name: order.customerId?.fullname,
           phone: order.customerId?.phone
-        }
+        },
+        deliveryAddress: order.deliveryAddressId
       }
     });
 
@@ -158,19 +175,19 @@ module.exports.acceptDeliveryRequest = async (req, res) => {
 module.exports.pickupOrder = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { orderToken, pickupOTP } = req.body;
+    const { orderId, pickupOTP } = req.body;  // Use orderId instead of orderToken
 
     console.log('========================================');
     console.log('PICKUP ORDER - DEBUG INFO');
     console.log('========================================');
     console.log('Delivery Boy userId:', userId);
-    console.log('Order token:', orderToken);
+    console.log('Order ID:', orderId);
     console.log('Pickup OTP:', pickupOTP);
 
-    if (!orderToken || !pickupOTP) {
+    if (!orderId || !pickupOTP) {
       return res.status(400).json({
         success: false,
-        message: 'Order token and pickup OTP are required'
+        message: 'Order ID and pickup OTP are required'
       });
     }
 
@@ -183,9 +200,9 @@ module.exports.pickupOrder = async (req, res) => {
       });
     }
 
-    // Find order by token and assigned delivery boy
+    // Find order by ID and assigned delivery boy
     const order = await Order.findOne({ 
-      orderToken: orderToken,
+      _id: orderId,
       deliveryBoyId: userId
     })
       .populate('customerId', 'fullname phone')
@@ -199,8 +216,8 @@ module.exports.pickupOrder = async (req, res) => {
       });
     }
 
-    // Check order status
-    if (order.orderStatus !== 'ASSIGNED_TO_DELIVERY' && order.orderStatus !== 'READY_FOR_PICKUP') {
+    // Check order status (allow both ASSIGNED_TO_DELIVERY and READY_FOR_PICKUP)
+    if (!['ASSIGNED_TO_DELIVERY', 'READY_FOR_PICKUP'].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: `Cannot pickup order. Current status: ${order.orderStatus}`
@@ -318,19 +335,19 @@ module.exports.pickupOrder = async (req, res) => {
 module.exports.completeDelivery = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { orderToken, deliveryOTP } = req.body;
+    const { orderId, deliveryOTP } = req.body;  // Use orderId instead of orderToken
 
     console.log('========================================');
     console.log('COMPLETE DELIVERY - DEBUG INFO');
     console.log('========================================');
     console.log('Delivery Boy userId:', userId);
-    console.log('Order token:', orderToken);
+    console.log('Order ID:', orderId);
     console.log('Delivery OTP:', deliveryOTP);
 
-    if (!orderToken || !deliveryOTP) {
+    if (!orderId || !deliveryOTP) {
       return res.status(400).json({
         success: false,
-        message: 'Order token and delivery OTP are required'
+        message: 'Order ID and delivery OTP are required'
       });
     }
 
@@ -343,9 +360,9 @@ module.exports.completeDelivery = async (req, res) => {
       });
     }
 
-    // Find order by token and assigned delivery boy
+    // Find order by ID and assigned delivery boy
     const order = await Order.findOne({ 
-      orderToken: orderToken,
+      _id: orderId,
       deliveryBoyId: userId
     })
       .populate('customerId', 'fullname phone')

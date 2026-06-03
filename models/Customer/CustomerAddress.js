@@ -20,6 +20,8 @@ const CustomerAddressSchema = new mongoose.Schema({
   pincode: { type: String, required: true, maxlength: 10 },
   latitude: { type: Number, min: -90, max: 90 },
   longitude: { type: Number, min: -180, max: 180 },
+  lan: { type: Number },
+  lng: { type: Number },
   isDefault: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

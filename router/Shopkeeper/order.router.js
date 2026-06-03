@@ -11,6 +11,7 @@ router.use(authMiddleware.userMiddlewere);
 router.get('/orders', orderController.getOrders);
 router.get('/orders/pending', orderController.getPendingOrders);
 router.get('/orders/stats', orderController.getOrderStats);
+router.get('/orders/categorized', require('../../controllers/Customer/order.controller').getCategorizedOrders);
 router.get('/orders/:orderId', orderController.getOrderDetails);
 
 // Order actions

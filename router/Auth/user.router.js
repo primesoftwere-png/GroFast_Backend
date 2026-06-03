@@ -14,4 +14,12 @@ router.put(
 );
 router.get("/profile", authMiddleware.userMiddlewere, userController.profile);
 router.get("/logout", authMiddleware.userMiddlewere, userController.logout);
+
+// Google Auth & OTP Login
+router.post("/google-login", userController.googleLogin);
+router.post("/send-otp", userController.sendOtp);
+router.post("/verify-otp", userController.verifyOtp);
+
+router.post("/change-password", authMiddleware.userMiddlewere, userController.changePassword);
+
 module.exports = router;

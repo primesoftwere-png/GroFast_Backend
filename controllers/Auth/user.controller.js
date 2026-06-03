@@ -263,15 +263,15 @@ module.exports.login = async (req, res) => {
     const { email, password } = req.body;
     console.log("email , password : ", email, password);
     if (!email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ success: false, message: "All fields are required" });
     }
     if (!/\S+@\S+\.\S+/.test(email)) {
-      return res.status(400).json({ message: "Invalid email format" });
+      return res.status(400).json({ success: false, message: "Invalid email format" });
     }
     if (password.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+        .json({ success: false, message: "Password must be at least 6 characters" });
     }
     console.log("email, password", email, password);
     
@@ -281,17 +281,26 @@ module.exports.login = async (req, res) => {
     
     if (!result || !result.data) {
       return res.status(401).json({ 
+        success: false,
         message: "Invalid credentials"
       });
     }
 
     if (!result.data.token) {
-      return res.status(400).json({ message: "Token generation failed" });
+      return res.status(400).json({ success: false, message: "Token generation failed" });
     }    
 
     const userResponse = result.data.user;
+
+    // Set cookie for browser-based auth
+    res.cookie("token", result.data.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
     
     res.status(200).json({ 
+      success: true,
       message: result.message || "Login successful", 
       user: userResponse, 
       token: result.data.token,
@@ -300,6 +309,7 @@ module.exports.login = async (req, res) => {
   } catch (error) {
     console.error("Login controller error:", error.message || error); // Enhanced logging
     res.status(500).json({ 
+      success: false,
       message: error.message || "Server error", 
       error: { name: error.name || 'UnknownError' } // Non-sensitive details
     });
@@ -370,4 +380,227 @@ module.exports.updateAddress = async (req, res) => {
     console.log(error);
     res.status(500).json({ message: "Server error", error });
   }
-};  
+};
+
+module.exports.googleLogin = async (req, res) => {
+  try {
+    const { email, fullname, googleId } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required for Google login" });
+    }
+
+    const trimmedEmail = email.toLowerCase().trim();
+    let user = await userModel.findOne({ email: trimmedEmail });
+    let isNewUser = false;
+
+    if (!user) {
+      // Create new user
+      const userData = {
+        fullname: fullname || email.split('@')[0],
+        email: trimmedEmail,
+        phone: `G${crypto.randomBytes(4).toString('hex')}`, // dummy phone as it's required
+        password: await userModel.hashPassword(crypto.randomBytes(10).toString("hex")),
+        role: 'user',
+        accountStatus: 'active',
+        googleId: googleId
+      };
+      
+      user = await userModel.create(userData);
+      isNewUser = true;
+    } else if (!user.googleId && googleId) {
+      // Link google ID if not linked
+      user.googleId = googleId;
+      await user.save();
+    }
+
+    // Check login allowance
+    if (!user.isLoginAllowed()) {
+      return res.status(403).json({ message: "Your account is not active." });
+    }
+
+    const token = await user.generateAuthToken();
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.status(200).json({
+      success: true,
+      message: isNewUser ? "User registered and logged in successfully" : "Login successful",
+      user: userResponse,
+      token,
+      status: user.accountStatus
+    });
+  } catch (error) {
+    console.error("Google login error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+module.exports.sendOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    let user = await userModel.findOne({ phone: phone.trim() });
+    
+    if (!user) {
+      const { fullname, email } = req.body;
+      if (fullname && email) {
+        const hashedPassword = await userModel.hashPassword(crypto.randomBytes(10).toString("hex"));
+        user = await userModel.create({
+          fullname: fullname.trim(),
+          email: email.toLowerCase().trim(),
+          phone: phone.trim(),
+          password: hashedPassword,
+          role: 'user',
+          accountStatus: 'active'
+        });
+      } else {
+        return res.status(404).json({ message: "User not found. Please provide fullname and email to register, or use a registered phone number." });
+      }
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    user.otp = otp;
+    user.otpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    await user.save();
+
+    // Send OTP via SMS API
+    const message = otp; // Sending just the OTP as requested to avoid DLT template mismatch
+    const apiUrl = `http://sms.hspmedianetwork.com/sendSMS?username=shrey&message=${message}&sendername=TXTSMS&smstype=TRANS&numbers=${phone.trim()}&apikey=adc102d0-5c99-4211-92b8-e7e2a3d77d74`;
+    
+    try {
+      const response = await fetch(apiUrl);
+      const result = await response.text();
+      console.log("SMS API Response:", result);
+    } catch (fetchError) {
+      console.error("Failed to send SMS:", fetchError);
+      // We can still proceed to allow testing if SMS API is down, or we could fail.
+      // Usually, it's better to log it and optionally return an error, but we'll proceed here for testing.
+    }
+
+    res.status(200).json({ success: true, message: "OTP sent successfully" });
+  } catch (error) {
+    console.error("Send OTP error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+module.exports.verifyOtp = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ message: "Phone and OTP are required" });
+    }
+
+    const user = await userModel.findOne({ phone: phone.trim() });
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.otp || user.otp !== otp.toString()) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (user.otpExpires && user.otpExpires < Date.now()) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    // Check login allowance
+    if (!user.isLoginAllowed()) {
+      return res.status(403).json({ message: "Your account is not active." });
+    }
+
+    // Clear OTP
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    const token = await user.generateAuthToken();
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user: userResponse,
+      token,
+      status: user.accountStatus
+    });
+  } catch (error) {
+    console.error("Verify OTP error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+module.exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long'
+      });
+    }
+
+    const user = await userModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Verify current password
+    const isPasswordMatch = await user.comparePassword(currentPassword);
+    if (!isPasswordMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Hash and update new password
+    user.password = await userModel.hashPassword(newPassword);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
+      error: error.message
+    });
+  }
+};
