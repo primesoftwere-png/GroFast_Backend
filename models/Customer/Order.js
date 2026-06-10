@@ -73,7 +73,7 @@ const OrderSchema = new mongoose.Schema({
   // OTP for Pickup (Delivery boy verifies at shop)
   otp: { 
     type: String,
-    default: () => Math.floor(1000 + Math.random() * 9000).toString() // 4-digit OTP
+    default: null // OTP will be generated when shopkeeper accepts
   },
   otpVerified: { 
     type: Boolean, 

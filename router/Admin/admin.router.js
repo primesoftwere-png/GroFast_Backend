@@ -62,6 +62,14 @@ router.get(
   adminController.getCategories
 );
 
+// NEW: Added GET route for dashboard orders
+router.get(
+  "/dashboard/orders",
+  authMiddleware.userMiddlewere,
+  roleMiddleware.authorizeRoles("admin", "superadmin"),
+  adminController.getDashboardOrders
+);
+
 // NEW: Added GET route for single category
 router.get(
   "/get-category/:categoryId",

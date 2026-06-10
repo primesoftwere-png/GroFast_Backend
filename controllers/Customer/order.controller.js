@@ -6,6 +6,8 @@ const User = require('../../models/user.model');
 const Cart = require('../../models/Customer/Cart');
 const CustomerAddress = require('../../models/Customer/CustomerAddress');
 
+const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
+
 /**
  * 1. CREATE ORDER (API)
  * Status: PENDING
@@ -578,6 +580,83 @@ module.exports.getCustomerOrders = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get orders',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Track Delivery Boy Location
+ */
+module.exports.trackDelivery = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user._id;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Verify access
+    if (order.customerId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized to track this order'
+      });
+    }
+
+    // Check if order is in a state where it has a delivery boy
+    const validStatuses = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'];
+    if (!validStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Tracking not available for order status: ${order.orderStatus}`
+      });
+    }
+
+    if (!order.deliveryBoyId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery boy not assigned yet'
+      });
+    }
+
+    const location = await DeliveryBoyLocation.findOne({ deliveryBoyId: order.deliveryBoyId });
+
+    if (!location) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery boy location not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order._id,
+        orderStatus: order.orderStatus,
+        deliveryBoyId: order.deliveryBoyId,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          speed: location.speed,
+          heading: location.heading,
+          accuracy: location.accuracy,
+          updatedAt: location.updatedAt
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error tracking delivery:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to track delivery',
       error: error.message
     });
   }

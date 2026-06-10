@@ -44,7 +44,14 @@ const DeliveryBoyLocationSchema = new mongoose.Schema({
   updatedAt: { 
     type: Date, 
     default: Date.now 
-  }
+  },
+  locationHistory: [{
+    latitude: Number,
+    longitude: Number,
+    speed: Number,
+    heading: Number,
+    timestamp: { type: Date, default: Date.now }
+  }]
 }, { 
   collection: 'delivery_boy_locations',
   timestamps: false

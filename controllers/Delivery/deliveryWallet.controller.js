@@ -205,3 +205,88 @@ module.exports.getCODSummary = async (req, res) => {
     });
   }
 };
+
+// ✅ Get Comprehensive Income Dashboard
+module.exports.getIncomeDashboard = async (req, res) => {
+  try {
+    const deliveryBoyId = req.user._id;
+
+    // Get wallet
+    let wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId });
+
+    if (!wallet) {
+      wallet = await DeliveryBoyWallet.create({
+        deliveryBoyId: deliveryBoyId,
+        balance: 0,
+        codLimit: 10000
+      });
+    }
+
+    // Get today's stats
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todayTransactions = await WalletTransaction.find({
+      deliveryBoyId: deliveryBoyId,
+      createdAt: { $gte: todayStart, $lte: todayEnd },
+      status: 'completed'
+    });
+
+    let todayCodCollected = 0;
+    let todayEarnings = 0;
+    
+    todayTransactions.forEach(tx => {
+      if (tx.transactionType === 'credit') {
+        todayEarnings += tx.amount;
+      }
+      if (tx.transactionType === 'debit' && tx.paymentMethod === 'cod') {
+        todayCodCollected += tx.amount;
+      }
+    });
+
+    // Get latest settlement
+    const Settlement = require("../../models/DeliveryBoy/Settlement");
+    const latestSettlement = await Settlement.findOne({ deliveryBoyId })
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Income dashboard retrieved successfully",
+      data: {
+        cashFlow: {
+          todayCollected: todayCodCollected,
+          totalCodCollected: wallet.codCollected,
+          pendingCodToSettle: wallet.codPending
+        },
+        onlineFlow: {
+          todayEarnings: todayEarnings,
+          totalEarnings: wallet.totalEarnings
+        },
+        wallet: {
+          balance: wallet.balance,
+          codLimit: wallet.codLimit,
+          availableCodLimit: wallet.codLimit - Math.abs(wallet.balance),
+          isBlocked: wallet.isBlocked,
+          blockReason: wallet.blockReason
+        },
+        settlement: latestSettlement ? {
+          status: latestSettlement.status,
+          amount: latestSettlement.amount,
+          date: latestSettlement.createdAt,
+          settlementNumber: latestSettlement.settlementNumber
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error("Get income dashboard error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};

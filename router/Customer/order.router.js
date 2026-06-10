@@ -17,9 +17,13 @@ router.get('/my-orders', authMiddleware.userMiddlewere, orderController.getCusto
 // 3. Get Order Details
 router.get('/:orderId', authMiddleware.userMiddlewere, orderController.getOrderDetails);
 
+// 4. Track Delivery Boy
+router.get('/:orderId/track', authMiddleware.userMiddlewere, orderController.trackDelivery);
+
 console.log('✅ Real-time order flow routes registered:');
 console.log('   - POST /create - Create new order');
 console.log('   - GET /my-orders - Get customer orders');
 console.log('   - GET /:orderId - Get order details');
+console.log('   - GET /:orderId/track - Track delivery boy location');
 
 module.exports = router;
