@@ -401,7 +401,7 @@ module.exports.completeDelivery = async (req, res) => {
     deliveryBoy.isAvailable = true;
     await deliveryBoy.save();
 
-    // Update delivery boy wallet (add earnings)
+    // Update delivery boy wallet (add earnings and handle COD)
     const deliveryEarnings = 50; // Calculate based on distance and order value
     let wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId: deliveryBoy._id });
     
@@ -409,27 +409,82 @@ module.exports.completeDelivery = async (req, res) => {
       wallet = await DeliveryBoyWallet.create({
         deliveryBoyId: deliveryBoy._id,
         balance: 0,
-        totalEarnings: 0,
-        totalWithdrawals: 0
+        codLimit: 10000
       });
     }
 
+    // 1. Process Delivery Earnings
+    const balanceBeforeEarnings = wallet.balance;
     wallet.balance += deliveryEarnings;
     wallet.totalEarnings += deliveryEarnings;
+    const balanceAfterEarnings = wallet.balance;
     await wallet.save();
 
-    // Create wallet transaction
+    // Create earnings transaction
     await WalletTransaction.create({
       deliveryBoyId: deliveryBoy._id,
       orderId: order._id,
-      type: 'credit',
+      transactionType: 'credit',
       amount: deliveryEarnings,
+      balanceBefore: balanceBeforeEarnings,
+      balanceAfter: balanceAfterEarnings,
       description: `Delivery earnings for order ${order.orderNumber}`,
-      balanceAfter: wallet.balance
+      paymentMethod: null,
+      status: 'completed'
     });
+
+    // 2. Process COD if applicable
+    if (order.paymentMethod === 'cod' || order.paymentMethod === 'COD') {
+      const balanceBeforeCOD = wallet.balance;
+      wallet.balance -= order.totalAmount; // Negative balance (debt to admin)
+      wallet.codCollected += order.totalAmount;
+      wallet.codPending += order.totalAmount;
+      const balanceAfterCOD = wallet.balance;
+      await wallet.save();
+
+      // Create COD debit transaction
+      await WalletTransaction.create({
+        deliveryBoyId: deliveryBoy._id,
+        orderId: order._id,
+        transactionType: 'debit',
+        amount: order.totalAmount,
+        balanceBefore: balanceBeforeCOD,
+        balanceAfter: balanceAfterCOD,
+        description: `COD collected for order ${order.orderNumber}`,
+        paymentMethod: 'cod',
+        status: 'completed'
+      });
+
+      // Check if wallet exceeds limit
+      if (!wallet.isWithinLimit()) {
+        wallet.isBlocked = true;
+        wallet.blockReason = 'COD limit exceeded. Please settle your dues.';
+        await wallet.save();
+
+        // Block delivery boy from receiving new orders
+        deliveryBoy.isBlocked = true;
+        deliveryBoy.blockReason = 'COD limit exceeded';
+        deliveryBoy.isOnline = false;
+        deliveryBoy.isAvailable = false;
+        await deliveryBoy.save();
+
+        // Create notification
+        const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
+        await DeliveryBoyNotification.create({
+          deliveryBoyId: deliveryBoy._id,
+          title: "Account Blocked",
+          message: `Your account has been blocked due to COD limit exceeded. Current balance: ₹${wallet.balance}. Please settle your dues immediately.`,
+          type: 'account_blocked',
+          priority: 'urgent'
+        });
+      }
+    }
 
     console.log('✓ Delivery completed successfully');
     console.log('Earnings added:', deliveryEarnings);
+    if (order.paymentMethod === 'cod' || order.paymentMethod === 'COD') {
+      console.log('COD Collected:', order.totalAmount);
+    }
     console.log('========================================');
 
     // ========== SOCKET.IO EMIT ==========

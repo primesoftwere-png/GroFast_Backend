@@ -66,16 +66,30 @@ module.exports.updateLocation = async (req, res) => {
       updatedAt: Date.now()
     };
 
+    const historyEntry = {
+      latitude: lat,
+      longitude: lng,
+      speed: speed ? parseFloat(speed) : null,
+      heading: heading ? parseFloat(heading) : null,
+      timestamp: Date.now()
+    };
+
     if (location) {
       // Update existing location
       location = await DeliveryBoyLocation.findOneAndUpdate(
         { deliveryBoyId },
-        locationData,
+        { 
+          $set: locationData,
+          $push: { locationHistory: historyEntry }
+        },
         { new: true }
       );
     } else {
       // Create new location record
-      location = await DeliveryBoyLocation.create(locationData);
+      location = await DeliveryBoyLocation.create({
+        ...locationData,
+        locationHistory: [historyEntry]
+      });
     }
 
     return res.status(200).json({
