@@ -42,9 +42,13 @@ const OrderSchema = new mongoose.Schema({
     enum: [
       'PENDING',        // Initial state after order creation
       'CONFIRMED',      // Shopkeeper accepted
+      'ACCEPTED',       // Shopkeeper accepted (alternate)
+      'READY_FOR_PICKUP',// Shopkeeper packed
       'ASSIGNED',       // Delivery boy assigned
+      'ASSIGNED_TO_DELIVERY', // Delivery boy assigned (alternate)
       'PICKED_UP',      // Delivery boy picked up (OTP verified)
       'IN_TRANSIT',     // On the way to customer
+      'OUT_FOR_DELIVERY',// On the way to customer (alternate)
       'DELIVERED',      // Successfully delivered
       'CANCELLED'       // Order cancelled
     ] 

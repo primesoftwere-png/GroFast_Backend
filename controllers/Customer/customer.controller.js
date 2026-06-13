@@ -287,6 +287,14 @@ module.exports.getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validate MongoDB ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID format"
+      });
+    }
+
     const category = await Category
       .findOne({ _id: id, status: 'active' })
       .populate('parentCategoryId', 'categoryName')
@@ -364,6 +372,45 @@ module.exports.getCategoriesWithProductCount = async (req, res) => {
   }
 };
 
+// ✅ Get structured categories (parents and nested children)
+module.exports.getStructuredCategories = async (req, res) => {
+  try {
+    const categories = await Category.find({ status: 'active' }).sort({ categoryName: 1 }).lean();
+
+    const categoryMap = {};
+    categories.forEach(cat => {
+      categoryMap[cat._id.toString()] = { ...cat, subCategories: [] };
+    });
+
+    const structuredData = [];
+
+    categories.forEach(cat => {
+      const mappedCat = categoryMap[cat._id.toString()];
+      if (cat.parentCategoryId) {
+        const parentId = cat.parentCategoryId.toString();
+        if (categoryMap[parentId]) {
+          categoryMap[parentId].subCategories.push(mappedCat);
+        } else {
+          structuredData.push(mappedCat);
+        }
+      } else {
+        structuredData.push(mappedCat);
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: structuredData,
+      count: structuredData.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching structured categories",
+      error: error.message,
+    });
+  }
+};
 
 // ==================== ADDRESS MANAGEMENT APIs ====================
 

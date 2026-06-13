@@ -417,8 +417,8 @@ module.exports.acceptOrder = async (req, res) => {
       // Find nearby delivery boys and send delivery requests
       try {
         const nearbyDeliveryBoys = await findNearbyDeliveryBoys(
-          shop.location?.coordinates[1] || 0, // lat
-          shop.location?.coordinates[0] || 0, // lng
+          shop.location?.coordinates?.[1] || 0, // lat
+          shop.location?.coordinates?.[0] || 0, // lng
           5 // radius in km
         );
 
@@ -432,8 +432,8 @@ module.exports.acceptOrder = async (req, res) => {
             pickupLocation: {
               shopName: shop.shopName,
               address: shop.address,
-              lat: shop.location?.coordinates[1] || 0,
-              lng: shop.location?.coordinates[0] || 0
+              lat: shop.location?.coordinates?.[1] || 0,
+              lng: shop.location?.coordinates?.[0] || 0
             },
             deliveryLocation: {
               address: order.deliveryAddress?.address || 'Customer Address',
@@ -743,6 +743,19 @@ module.exports.getOrderStats = async (req, res) => {
 
 // ==================== HELPER FUNCTIONS ====================
 
+// Calculate distance between two coordinates in km using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 /**
  * Find nearby delivery boys within a radius
  * @param {Number} lat - Latitude
@@ -752,44 +765,51 @@ module.exports.getOrderStats = async (req, res) => {
  */
 async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
   try {
-    // Convert radius from kilometers to meters
-    const radiusMeters = radiusKm * 1000;
-
-    // Find delivery boys who are:
-    // 1. Online/available
-    // 2. KYC verified
-    // 3. Within the specified radius
-    const nearbyDeliveryBoys = await DeliveryBoy.find({
+    // Find all online and available delivery boys
+    const availableDeliveryBoys = await DeliveryBoy.find({
       isOnline: true,
-      isAvailable: true,
-      kycStatus: 'approved',
-      'currentLocation.coordinates': {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [lng, lat] // [longitude, latitude]
-          },
-          $maxDistance: radiusMeters
-        }
-      }
-    }).limit(10); // Limit to 10 nearest delivery boys
-
-    return nearbyDeliveryBoys;
-  } catch (error) {
-    console.error('Error finding nearby delivery boys:', error);
+      isAvailable: true
+    });
     
-    // Fallback: Return all available delivery boys if geospatial query fails
-    try {
-      const availableDeliveryBoys = await DeliveryBoy.find({
-        isOnline: true,
-        isAvailable: true,
-        kycStatus: 'approved'
-      }).limit(10);
-      
-      return availableDeliveryBoys;
-    } catch (fallbackError) {
-      console.error('Fallback query also failed:', fallbackError);
+    if (availableDeliveryBoys.length === 0) {
       return [];
     }
+
+    const deliveryBoyUserIds = availableDeliveryBoys.map(db => db.userId);
+    const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
+
+    // Get their active locations
+    const locations = await DeliveryBoyLocation.find({
+      deliveryBoyId: { $in: deliveryBoyUserIds },
+      isActive: true
+    });
+
+    if (locations.length === 0) {
+      // Fallback: If no locations found, just return available ones to ensure order gets processed
+      return availableDeliveryBoys.slice(0, 10);
+    }
+
+    // Filter by distance and sort
+    const deliveryBoysWithDistance = availableDeliveryBoys.map(db => {
+      const loc = locations.find(l => l.deliveryBoyId.toString() === db.userId.toString());
+      if (!loc || !loc.latitude || !loc.longitude) return null;
+
+      const distance = calculateDistance(lat, lng, loc.latitude, loc.longitude);
+      
+      if (distance <= radiusKm) {
+        return { deliveryBoy: db, distance };
+      }
+      return null;
+    }).filter(item => item !== null);
+
+    // Sort by nearest
+    deliveryBoysWithDistance.sort((a, b) => a.distance - b.distance);
+
+    // Return the top 10 nearest delivery boys
+    return deliveryBoysWithDistance.slice(0, 10).map(item => item.deliveryBoy);
+
+  } catch (error) {
+    console.error('Error finding delivery boys:', error);
+    return [];
   }
 }
