@@ -454,3 +454,72 @@ module.exports.getByProductId = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+module.exports.getDashboardOrders = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20, search } = req.query;
+    
+    // Build query
+    const query = {};
+    if (status) {
+      query.orderStatus = status.toUpperCase();
+    }
+    
+    if (search) {
+      // Add search by orderNumber or customer details if needed
+      query.$or = [
+        { orderNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const Order = require('../../models/Customer/Order');
+
+    // Get counts
+    const total = await Order.countDocuments();
+    const pending = await Order.countDocuments({ orderStatus: 'PENDING' });
+    const confirmed = await Order.countDocuments({ orderStatus: 'CONFIRMED' });
+    const preparing = await Order.countDocuments({ orderStatus: 'PREPARING' });
+    const readyForPickup = await Order.countDocuments({ orderStatus: 'READY_FOR_PICKUP' });
+    const assigned = await Order.countDocuments({ orderStatus: 'ASSIGNED' });
+    const pickedUp = await Order.countDocuments({ orderStatus: 'PICKED_UP' });
+    const onTheWay = await Order.countDocuments({ orderStatus: 'OUT_FOR_DELIVERY' });
+    const delivered = await Order.countDocuments({ orderStatus: 'DELIVERED' });
+    const cancelled = await Order.countDocuments({ orderStatus: 'CANCELLED' });
+    const failed = await Order.countDocuments({ orderStatus: 'FAILED' });
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get orders
+    const recentOrders = await Order.find(query)
+      .populate('customerId', 'fullname phone email')
+      .populate('shopId', 'fullname shopName phone')
+      .populate('deliveryBoyId', 'fullname phone')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+      
+    const filteredTotal = await Order.countDocuments(query);
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        total, pending, confirmed, preparing, 
+        ready_for_pickup: readyForPickup, 
+        assigned, picked_up: pickedUp, 
+        on_the_way: onTheWay, delivered, cancelled, failed
+      },
+      recentOrders,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: filteredTotal
+      }
+    });
+  } catch (error) {
+    console.error('Get dashboard orders error:', error);
+    return res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};

@@ -66,6 +66,7 @@ router.post('/location/update', protectDeliveryRoutes, deliveryController.update
 router.get('/location/current', protectDeliveryRoutes, deliveryController.getCurrentLocation);
 
 // ==================== WALLET ROUTES ====================
+router.get('/wallet/dashboard', protectDeliveryRoutes, deliveryController.getIncomeDashboard);
 router.get('/wallet/balance', protectDeliveryRoutes, deliveryController.getWalletBalance);
 router.get('/wallet/transactions', protectDeliveryRoutes, deliveryController.getWalletTransactions);
 router.get('/wallet/cod-summary', protectDeliveryRoutes, deliveryController.getCODSummary);

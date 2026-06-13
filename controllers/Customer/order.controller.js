@@ -41,6 +41,8 @@ async function resolveShopkeeperTarget(shopId) {
   };
 }
 
+const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
+
 /**
  * 1. CREATE ORDER (API)
  * Status: PENDING
@@ -907,92 +909,77 @@ module.exports.getCustomerOrders = async (req, res) => {
 };
 
 /**
- * Get categorized orders (recent vs history)
+ * Track Delivery Boy Location
  */
-module.exports.getCategorizedOrders = async (req, res) => {
+module.exports.trackDelivery = async (req, res) => {
   try {
-    // Accept userId from path params, query params, or token
-    const userIdParam = req.params.userId || req.query.userId || (req.user && req.user._id);
-    
-    if (!userIdParam) {
-      return res.status(400).json({
+    const { orderId } = req.params;
+    const userId = req.user._id;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
         success: false,
-        message: 'userId is required. Pass it as path param: /categorized/:userId'
+        message: 'Order not found'
       });
     }
 
-    // Convert string userId to mongoose ObjectId for proper matching
-    const mongoose = require('mongoose');
-    let userId;
-    try {
-      userId = new mongoose.Types.ObjectId(userIdParam);
-    } catch (e) {
-      return res.status(400).json({
+    // Verify access
+    if (order.customerId.toString() !== userId.toString()) {
+      return res.status(403).json({
         success: false,
-        message: 'Invalid userId format'
+        message: 'Unauthorized to track this order'
       });
     }
 
-    const userRole = req.query.role || (req.user && req.user.role) || 'user';
-
-    // Dynamically filter based on user role
-    let query = {};
-    if (userRole === 'admin') {
-      query.shopId = userId; // Shopkeepers see orders for their shop
-    } else if (userRole === 'deliveryBoy') {
-      query.deliveryBoyId = userId; // Delivery boys see their assigned orders
-    } else if (userRole === 'superadmin') {
-      // Superadmin sees all orders, no filter needed
-      query = {}; 
-    } else {
-      // For customers - find all orders where this user is the customer
-      query.customerId = userId;
+    // Check if order is in a state where it has a delivery boy
+    const validStatuses = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'];
+    if (!validStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Tracking not available for order status: ${order.orderStatus}`
+      });
     }
 
-    const orders = await Order.find(query)
-      .populate('shopId', 'fullname shopName phone')
-      .populate('customerId', 'fullname phone email')
-      .populate('deliveryBoyId', 'fullname phone')
-      .populate('deliveryAddressId')
-      .sort({ createdAt: -1 });
+    if (!order.deliveryBoyId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery boy not assigned yet'
+      });
+    }
 
-    const recent = [];
-    const history = [];
+    const location = await DeliveryBoyLocation.findOne({ deliveryBoyId: order.deliveryBoyId });
 
-    const historyStatuses = ['DELIVERED', 'CANCELLED'];
-
-    orders.forEach(order => {
-      const status = (order.orderStatus || '').toUpperCase();
-      const orderObj = order.toObject(); // Convert to plain JSON object to add dynamic properties
-
-      if (historyStatuses.includes(status)) {
-        history.push(orderObj);
-      } else {
-        // Add dynamic properties for frontend tracking button
-        orderObj.showTrackingButton = true;
-        orderObj.actionButton = {
-          text: "Track Order",
-          url: `/tracking/${orderObj.orderToken || orderObj._id}`
-        };
-        
-        recent.push(orderObj);
-      }
-    });
+    if (!location) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery boy location not found'
+      });
+    }
 
     res.json({
       success: true,
-      count: orders.length,
       data: {
-        recent,
-        history
+        orderId: order._id,
+        orderStatus: order.orderStatus,
+        deliveryBoyId: order.deliveryBoyId,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          speed: location.speed,
+          heading: location.heading,
+          accuracy: location.accuracy,
+          updatedAt: location.updatedAt
+        }
       }
     });
 
   } catch (error) {
-    console.error('Error getting categorized orders:', error);
+    console.error('Error tracking delivery:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get categorized orders',
+      message: 'Failed to track delivery',
       error: error.message
     });
   }

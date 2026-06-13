@@ -7,6 +7,8 @@ const Order = require('../models/Customer/Order');
 const Shopkeeper = require('../models/ShopKeeper/Shopkeeper');
 const DeliveryBoy = require('../models/DeliveryBoy/DeliveryBoy');
 const DeliveryBoyLocation = require('../models/DeliveryBoy/DeliveryBoyLocation');
+const Shopkeeper = require('../models/ShopKeeper/Shopkeeper');
+const Shop = require('../models/ShopKeeper/Shop');
 const Notification = require('../models/Customer/Notification');
 
 /**
@@ -204,25 +206,52 @@ function initializeOrderFlowSocket(io) {
           return;
         }
 
-        // Update order status
-        order.orderStatus = 'SHOP_ACCEPTED';
+        // Update order status and perfectly generate OTP
+        const generatedOTP = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit perfectly generated OTP
+        order.orderStatus = 'CONFIRMED';
         order.acceptedAt = new Date();
+        
+        // Save both OTP formats for perfect backward/forward compatibility
+        order.otp = generatedOTP;
+        order.pickupOTP = {
+          code: generatedOTP,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          verified: false
+        };
+        
         await order.save();
 
         console.log(`✓ Order ${orderId} status: PENDING → SHOP_ACCEPTED`);
 
-        // Find online delivery boys
-        const DeliveryBoy = require('../models/DeliveryBoy/DeliveryBoy');
-        const availableDeliveryBoys = await DeliveryBoy.find({
+        // Get shop location perfectly
+        let shopLat = 0, shopLng = 0;
+        const shopkeeperProfile = await Shopkeeper.findOne({ userId: order.shopId._id });
+        if (shopkeeperProfile) {
+          const shopProfile = await Shop.findOne({ shopkeeperId: shopkeeperProfile._id });
+          if (shopProfile && shopProfile.location && shopProfile.location.coordinates) {
+            shopLng = shopProfile.location.coordinates[0];
+            shopLat = shopProfile.location.coordinates[1];
+          }
+        }
+
+        // Find available delivery boys
+        const availableBoys = await DeliveryBoy.find({
           isOnline: true,
           isAvailable: true,
           isBlocked: false
-        }).limit(10);
+        });
 
-        if (availableDeliveryBoys.length > 0) {
-          availableDeliveryBoys.forEach(db => {
-            if (db.userId) {
-              io.to(db.userId.toString()).emit('order-available', {
+        const maxDistanceKm = 5; // 5 kilometers radius
+        let notifiedCount = 0;
+
+        for (const boy of availableBoys) {
+          // Get their latest location from database
+          const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: boy.userId });
+          if (loc && loc.latitude && loc.longitude && shopLat && shopLng) {
+            const distance = getDistanceFromLatLonInKm(shopLat, shopLng, loc.latitude, loc.longitude);
+            if (distance <= maxDistanceKm) {
+              // Emit ONLY to this nearest delivery boy
+              io.to(boy.userId.toString()).emit('order-available', {
                 orderId: order._id,
                 orderNumber: order.orderNumber,
                 shopId: order.shopId._id,
@@ -232,15 +261,34 @@ function initializeOrderFlowSocket(io) {
                 totalAmount: order.totalAmount,
                 deliveryCharge: order.deliveryCharge,
                 paymentMethod: order.paymentMethod,
-                status: 'SHOP_ACCEPTED',
+                status: 'CONFIRMED',
+                distance: distance.toFixed(1) + ' km',
                 createdAt: order.createdAt
               });
+              notifiedCount++;
             }
-          });
-          console.log(`✓ Emitted order-available to ${availableDeliveryBoys.length} delivery boys`);
-        } else {
-          console.log(`⚠ No online delivery boys found`);
+          }
         }
+
+        // Fallback: If no nearby boys found within radius, broadcast to all available boys
+        if (notifiedCount === 0) {
+          console.log(`⚠ No nearby delivery boys found within ${maxDistanceKm}km. Broadcasting to all.`);
+          io.to('delivery-room').emit('order-available', {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            shopId: order.shopId._id,
+            shopName: order.shopId.shopName || order.shopId.fullname,
+            shopPhone: order.shopId.phone,
+            customerName: order.customerId.fullname,
+            totalAmount: order.totalAmount,
+            deliveryCharge: order.deliveryCharge,
+            paymentMethod: order.paymentMethod,
+            status: 'CONFIRMED',
+            createdAt: order.createdAt
+          });
+        }
+
+        console.log(`✓ Emitted order-available to ${notifiedCount > 0 ? notifiedCount + ' nearest delivery boys' : 'all delivery boys (fallback)'}`);
 
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
@@ -455,15 +503,26 @@ function initializeOrderFlowSocket(io) {
         await DeliveryBoyLocation.findOneAndUpdate(
           { deliveryBoyId: userId },
           {
-            deliveryBoyId: userId,
-            orderId: orderId,
-            latitude: latitude,
-            longitude: longitude,
-            accuracy: accuracy ? parseFloat(accuracy) : null,
-            speed: speed ? parseFloat(speed) : null,
-            heading: heading ? parseFloat(heading) : null,
-            isActive: true,
-            updatedAt: new Date()
+            $set: {
+              deliveryBoyId: userId,
+              orderId: orderId,
+              latitude: latitude,
+              longitude: longitude,
+              accuracy: accuracy ? parseFloat(accuracy) : null,
+              speed: speed ? parseFloat(speed) : null,
+              heading: heading ? parseFloat(heading) : null,
+              isActive: true,
+              updatedAt: new Date()
+            },
+            $push: {
+              locationHistory: {
+                latitude: latitude,
+                longitude: longitude,
+                speed: speed ? parseFloat(speed) : null,
+                heading: heading ? parseFloat(heading) : null,
+                timestamp: new Date()
+              }
+            }
           },
           { upsert: true, new: true }
         );
@@ -531,14 +590,7 @@ function initializeOrderFlowSocket(io) {
     // ==================== DISCONNECT HANDLER ====================
     
     socket.on('disconnect', async () => {
-      console.log('\n========================================');
-      console.log('❌ SOCKET DISCONNECTED');
-      console.log('========================================');
-      console.log('Socket ID:', socket.id);
-      console.log('User:', socket.user.fullname);
-      console.log('Role:', socket.userRole);
-      console.log('Timestamp:', new Date().toISOString());
-      console.log('========================================\n');
+      console.log(`❌ Socket disconnected: ${socket.id} (${socket.user?.fullname || 'Unknown'})`);
       
       // Mark delivery boy as offline
       if (role === 'deliveryBoy') {
@@ -589,6 +641,38 @@ async function markDeliveryBoyOffline(userId) {
   } catch (error) {
     console.error('Error marking delivery boy offline:', error);
   }
+}
+
+/**
+ * Calculate distance between two coordinates in kilometers
+ */
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c; // Distance in km
+}
+
+/**
+ * Calculate distance between two coordinates in kilometers
+ */
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c; // Distance in km
 }
 
 // ==================== EXPORTED SOCKET HELPER FUNCTIONS ====================
