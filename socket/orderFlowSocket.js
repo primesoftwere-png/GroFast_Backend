@@ -644,165 +644,91 @@ async function markDeliveryBoyOffline(userId) {
 }
 
 /**
- * Calculate distance between two coordinates in kilometers
+ * Emit order accepted status to customer
  */
-function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
-  const R = 6371; // Radius of the earth in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c; // Distance in km
-}
-
-/**
- * Calculate distance between two coordinates in kilometers
- */
-function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
-  const R = 6371; // Radius of the earth in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c; // Distance in km
-}
-
-// ==================== EXPORTED SOCKET HELPER FUNCTIONS ====================
-// These are called from REST API controllers to emit real-time events
-
-/**
- * Emit when a delivery boy is assigned to an order
- * Called from: deliveryOrderManagement.controller.js
- */
-function emitDeliveryBoyAssigned(io, customerId, shopId, data) {
-  try {
-    if (customerId) {
-      io.to(customerId.toString()).emit('order-status', {
-        type: 'delivery_boy_assigned',
-        ...data
-      });
-    }
-    if (shopId) {
-      io.to(shopId.toString()).emit('delivery-assigned', data);
-    }
-    console.log(`✓ Emitted delivery-assigned to customer: ${customerId}, shop: ${shopId}`);
-  } catch (error) {
-    console.error('Error in emitDeliveryBoyAssigned:', error);
+function emitOrderAcceptedToCustomer(io, customerId, data) {
+  if (io && customerId) {
+    io.to(customerId.toString()).emit('order-status', data);
   }
 }
 
 /**
- * Emit when order is out for delivery (picked up by delivery boy)
- * Called from: deliveryOrderManagement.controller.js
+ * Emit delivery request to nearby delivery boys
  */
-function emitOrderOutForDelivery(io, customerId, data) {
-  try {
-    if (customerId) {
-      io.to(customerId.toString()).emit('order-status', {
-        type: 'out_for_delivery',
-        ...data
-      });
-    }
-    console.log(`✓ Emitted out-for-delivery to customer: ${customerId}`);
-  } catch (error) {
-    console.error('Error in emitOrderOutForDelivery:', error);
+function emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, data) {
+  if (io && deliveryBoyIds && deliveryBoyIds.length > 0) {
+    deliveryBoyIds.forEach(id => {
+      io.to(id.toString()).emit('delivery-request', data);
+    });
   }
 }
 
 /**
- * Emit when order is delivered
- * Called from: deliveryOrderManagement.controller.js
- */
-function emitOrderDelivered(io, customerId, shopId, data) {
-  try {
-    if (customerId) {
-      io.to(customerId.toString()).emit('order-status', {
-        type: 'delivered',
-        ...data
-      });
-    }
-    if (shopId) {
-      io.to(shopId.toString()).emit('order-delivered', data);
-    }
-    console.log(`✓ Emitted order-delivered to customer: ${customerId}, shop: ${shopId}`);
-  } catch (error) {
-    console.error('Error in emitOrderDelivered:', error);
-  }
-}
-
-/**
- * Emit when order is ready for pickup
- * Called from: shopkeeperOrder.controller.js
+ * Emit order ready for pickup to customer and delivery boy
  */
 function emitOrderReady(io, customerId, deliveryBoyId, data) {
-  try {
-    if (customerId) {
-      io.to(customerId.toString()).emit('order-status', {
-        type: 'ready_for_pickup',
-        ...data
-      });
-    }
-    if (deliveryBoyId) {
-      io.to(deliveryBoyId.toString()).emit('order-ready-for-pickup', data);
-    }
-    console.log(`✓ Emitted order-ready to customer: ${customerId}`);
-  } catch (error) {
-    console.error('Error in emitOrderReady:', error);
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-status', data);
+    if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-ready', data);
   }
 }
 
 /**
- * Emit when order is cancelled
- * Called from: shopkeeperOrder.controller.js
+ * Emit order cancelled to customer and delivery boy
  */
 function emitOrderCancelled(io, customerId, deliveryBoyId, data) {
-  try {
-    if (customerId) {
-      io.to(customerId.toString()).emit('order-status', {
-        type: 'cancelled',
-        ...data
-      });
-    }
-    if (deliveryBoyId) {
-      io.to(deliveryBoyId.toString()).emit('order-cancelled', data);
-    }
-    console.log(`✓ Emitted order-cancelled to customer: ${customerId}`);
-  } catch (error) {
-    console.error('Error in emitOrderCancelled:', error);
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-status', data);
+    if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-cancelled', data);
   }
 }
 
 /**
- * Cancel pending delivery requests (when order is assigned)
- * Broadcasts to delivery-room that this order is no longer available
+ * Emit delivery boy assigned to customer and shopkeeper
  */
-function cancelDeliveryRequests(io, orderId, orderNumber) {
-  try {
-    io.to('delivery-room').emit('order-taken', {
-      orderId,
-      orderNumber,
-      message: 'This order has been assigned to another delivery partner'
-    });
-    console.log(`✓ Broadcasted order-taken for order: ${orderId}`);
-  } catch (error) {
-    console.error('Error in cancelDeliveryRequests:', error);
+function emitDeliveryBoyAssigned(io, customerId, shopId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('delivery-assigned', data);
+    if (shopId) io.to(shopId.toString()).emit('delivery-assigned', data);
+  }
+}
+
+/**
+ * Emit order out for delivery to customer
+ */
+function emitOrderOutForDelivery(io, customerId, data) {
+  if (io && customerId) {
+    io.to(customerId.toString()).emit('order-out-for-delivery', data);
+  }
+}
+
+/**
+ * Emit order delivered to customer and shopkeeper
+ */
+function emitOrderDelivered(io, customerId, shopId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-delivered', data);
+    if (shopId) io.to(shopId.toString()).emit('order-delivered', data);
+  }
+}
+
+/**
+ * Cancel delivery requests to other delivery boys
+ */
+function cancelDeliveryRequests(io, data) {
+  if (io) {
+    io.to('delivery-room').emit('delivery-request-cancelled', data);
   }
 }
 
 module.exports = { 
   initializeOrderFlowSocket,
+  emitOrderAcceptedToCustomer,
+  emitDeliveryRequestToNearbyDeliveryBoys,
+  emitOrderReady,
+  emitOrderCancelled,
   emitDeliveryBoyAssigned,
   emitOrderOutForDelivery,
   emitOrderDelivered,
-  emitOrderReady,
-  emitOrderCancelled,
   cancelDeliveryRequests
 };

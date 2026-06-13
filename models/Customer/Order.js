@@ -40,21 +40,17 @@ const OrderSchema = new mongoose.Schema({
     type: String, 
     default: 'PENDING', 
     enum: [
-      'PENDING',
-      'SHOP_ACCEPTED',
-      'CANCELLED_BY_SHOP',
-      'SEARCHING_DELIVERY_PARTNER',
-      'DELIVERY_ASSIGNED',
-      'DELIVERY_REACHED_STORE',
-      'WAITING_PICKUP_OTP',
-      'ORDER_PICKED_UP',
-      'OUT_FOR_DELIVERY',
-      'DELIVERY_REACHED_CUSTOMER',
-      'WAITING_DELIVERY_OTP',
-      'DELIVERED',
-      'CANCELLED_BY_CUSTOMER',
-      'DELIVERY_REJECTED',
-      'SHOP_TIMEOUT'
+      'PENDING',        // Initial state after order creation
+      'CONFIRMED',      // Shopkeeper accepted
+      'ACCEPTED',       // Shopkeeper accepted (alternate)
+      'READY_FOR_PICKUP',// Shopkeeper packed
+      'ASSIGNED',       // Delivery boy assigned
+      'ASSIGNED_TO_DELIVERY', // Delivery boy assigned (alternate)
+      'PICKED_UP',      // Delivery boy picked up (OTP verified)
+      'IN_TRANSIT',     // On the way to customer
+      'OUT_FOR_DELIVERY',// On the way to customer (alternate)
+      'DELIVERED',      // Successfully delivered
+      'CANCELLED'       // Order cancelled
     ] 
   },
   

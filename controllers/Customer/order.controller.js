@@ -63,6 +63,10 @@ module.exports.createOrder = async (req, res) => {
       totalAmount
     } = req.body;
 
+    if (paymentMethod) {
+      paymentMethod = paymentMethod.toUpperCase();
+    }
+
     // Validation for deliveryAddressId and paymentMethod
     if (!deliveryAddressId || !paymentMethod) {
       return res.status(400).json({
@@ -835,6 +839,7 @@ module.exports.getOrderDetails = async (req, res) => {
 };
 
 /**
+<<<<<<< HEAD
  * Get order by token
  */
 module.exports.getOrderByToken = async (req, res) => {
@@ -842,6 +847,24 @@ module.exports.getOrderByToken = async (req, res) => {
     const { orderToken } = req.params;
 
     const order = await Order.findOne({ orderToken })
+=======
+ * Get recent order details by token or number
+ */
+module.exports.getRecentOrder = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const userId = req.user._id;
+
+    // Build query to find by _id, orderToken, or orderNumber
+    const query = { $or: [{ orderToken: identifier }, { orderNumber: identifier }] };
+    
+    // If identifier is a valid ObjectId, also check _id
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      query.$or.push({ _id: identifier });
+    }
+
+    const order = await Order.findOne(query)
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       .populate('customerId', 'fullname phone email')
       .populate('shopId', 'fullname phone email shopName address')
       .populate('deliveryBoyId', 'fullname phone')
@@ -854,16 +877,38 @@ module.exports.getOrderByToken = async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
+=======
+    // Verify access
+    const isCustomer = order.customerId._id.toString() === userId.toString();
+    const isShop = order.shopId._id.toString() === userId.toString();
+    const isDeliveryBoy = order.deliveryBoyId && order.deliveryBoyId._id.toString() === userId.toString();
+
+    if (!isCustomer && !isShop && !isDeliveryBoy) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
     res.json({
       success: true,
       data: order
     });
 
   } catch (error) {
+<<<<<<< HEAD
     console.error('Error getting order by token:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get order details',
+=======
+    console.error('Error getting recent order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get recent order',
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       error: error.message
     });
   }

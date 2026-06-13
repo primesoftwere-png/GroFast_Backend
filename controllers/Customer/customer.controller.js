@@ -343,9 +343,24 @@ module.exports.getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
+<<<<<<< HEAD
     const category = await Category.findOne({ _id: id, status: "active" })
       .populate("parentCategoryId", "categoryName")
       .populate("createdBy", "fullname email");
+=======
+    // Validate MongoDB ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID format"
+      });
+    }
+
+    const category = await Category
+      .findOne({ _id: id, status: 'active' })
+      .populate('parentCategoryId', 'categoryName')
+      .populate('createdBy', 'fullname email');
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
 
     if (!category) {
       return res.status(404).json({
@@ -418,6 +433,7 @@ module.exports.getCategoriesWithProductCount = async (req, res) => {
   }
 };
 
+<<<<<<< HEAD
 // ✅ Get perfectly separated categories (parents with nested children)
 module.exports.getStructuredCategories = async (req, res) => {
   try {
@@ -459,17 +475,52 @@ module.exports.getStructuredCategories = async (req, res) => {
         ...parent,
         children: parentChildren,
       };
+=======
+// ✅ Get structured categories (parents and nested children)
+module.exports.getStructuredCategories = async (req, res) => {
+  try {
+    const categories = await Category.find({ status: 'active' }).sort({ categoryName: 1 }).lean();
+
+    const categoryMap = {};
+    categories.forEach(cat => {
+      categoryMap[cat._id.toString()] = { ...cat, subCategories: [] };
+    });
+
+    const structuredData = [];
+
+    categories.forEach(cat => {
+      const mappedCat = categoryMap[cat._id.toString()];
+      if (cat.parentCategoryId) {
+        const parentId = cat.parentCategoryId.toString();
+        if (categoryMap[parentId]) {
+          categoryMap[parentId].subCategories.push(mappedCat);
+        } else {
+          structuredData.push(mappedCat);
+        }
+      } else {
+        structuredData.push(mappedCat);
+      }
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
     });
 
     res.status(200).json({
       success: true,
+<<<<<<< HEAD
       message: "Categories fetched successfully",
       data: structuredCategories,
+=======
+      data: structuredData,
+      count: structuredData.length
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
     });
   } catch (error) {
     res.status(500).json({
       success: false,
+<<<<<<< HEAD
       message: "Error fetching categories",
+=======
+      message: "Error fetching structured categories",
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       error: error.message,
     });
   }

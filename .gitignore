@@ -36,3 +36,4 @@ temp/
 # package-lock.json
 # yarn.lock
 .vercel
+.env*

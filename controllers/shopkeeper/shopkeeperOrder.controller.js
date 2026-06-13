@@ -440,12 +440,13 @@ module.exports.acceptOrder = async (req, res) => {
       // Find nearby delivery boys and send delivery requests
       try {
         const nearbyDeliveryBoys = await findNearbyDeliveryBoys(
-          shop.location?.coordinates[1] || 0, // lat
-          shop.location?.coordinates[0] || 0, // lng
+          shop.location?.coordinates?.[1] || 0, // lat
+          shop.location?.coordinates?.[0] || 0, // lng
           5 // radius in km
         );
 
         if (nearbyDeliveryBoys.length > 0) {
+<<<<<<< HEAD
           // Emit to each nearby delivery boy
           nearbyDeliveryBoys.forEach(db => {
             if (db.userId) {
@@ -469,6 +470,28 @@ module.exports.acceptOrder = async (req, res) => {
                 expiresIn: 60 // 60 seconds to accept
               });
             }
+=======
+          const deliveryBoyIds = nearbyDeliveryBoys.map(db => db.userId.toString());
+          
+          emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            orderToken: order.orderToken,
+            pickupLocation: {
+              shopName: shop.shopName,
+              address: shop.address,
+              lat: shop.location?.coordinates?.[1] || 0,
+              lng: shop.location?.coordinates?.[0] || 0
+            },
+            deliveryLocation: {
+              address: order.deliveryAddress?.address || 'Customer Address',
+              lat: order.deliveryAddress?.lat || 0,
+              lng: order.deliveryAddress?.lng || 0
+            },
+            distance: '2.5 km', // Calculate actual distance
+            estimatedEarnings: 50, // Calculate based on distance
+            expiresIn: 60 // 60 seconds to accept
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
           });
 
           console.log(`✓ Delivery requests sent to ${nearbyDeliveryBoys.length} nearby delivery boys`);
@@ -888,6 +911,19 @@ module.exports.getOrderStats = async (req, res) => {
 
 // ==================== HELPER FUNCTIONS ====================
 
+// Calculate distance between two coordinates in km using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 /**
  * Find nearby delivery boys within a radius
  * @param {Number} lat - Latitude
@@ -897,6 +933,7 @@ module.exports.getOrderStats = async (req, res) => {
  */
 async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
   try {
+<<<<<<< HEAD
     // Convert radius from kilometers to meters
     const radiusMeters = radiusKm * 1000;
 
@@ -924,7 +961,53 @@ async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
       return availableDeliveryBoys;
     } catch (fallbackError) {
       console.error('Fallback query also failed:', fallbackError);
+=======
+    // Find all online and available delivery boys
+    const availableDeliveryBoys = await DeliveryBoy.find({
+      isOnline: true,
+      isAvailable: true
+    });
+    
+    if (availableDeliveryBoys.length === 0) {
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       return [];
     }
+
+    const deliveryBoyUserIds = availableDeliveryBoys.map(db => db.userId);
+    const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
+
+    // Get their active locations
+    const locations = await DeliveryBoyLocation.find({
+      deliveryBoyId: { $in: deliveryBoyUserIds },
+      isActive: true
+    });
+
+    if (locations.length === 0) {
+      // Fallback: If no locations found, just return available ones to ensure order gets processed
+      return availableDeliveryBoys.slice(0, 10);
+    }
+
+    // Filter by distance and sort
+    const deliveryBoysWithDistance = availableDeliveryBoys.map(db => {
+      const loc = locations.find(l => l.deliveryBoyId.toString() === db.userId.toString());
+      if (!loc || !loc.latitude || !loc.longitude) return null;
+
+      const distance = calculateDistance(lat, lng, loc.latitude, loc.longitude);
+      
+      if (distance <= radiusKm) {
+        return { deliveryBoy: db, distance };
+      }
+      return null;
+    }).filter(item => item !== null);
+
+    // Sort by nearest
+    deliveryBoysWithDistance.sort((a, b) => a.distance - b.distance);
+
+    // Return the top 10 nearest delivery boys
+    return deliveryBoysWithDistance.slice(0, 10).map(item => item.deliveryBoy);
+
+  } catch (error) {
+    console.error('Error finding delivery boys:', error);
+    return [];
   }
 }

@@ -18,8 +18,7 @@ const server = http.createServer(app); // For Socket.IO support
 
 const io = new Server(server, {
   cors: {
-    origin: true,
-    credentials: true,
+    origin: "*",
   },
   pingTimeout: 60000,
   pingInterval: 25000
@@ -31,7 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "*",    
+    origin: "*",
   })
 );
 app.use("/uploads", express.static("uploads"));

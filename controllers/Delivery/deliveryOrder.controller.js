@@ -40,7 +40,11 @@ module.exports.getAvailableOrders = async (req, res) => {
 
     // Build query for available orders
     const query = {
+<<<<<<< HEAD
       orderStatus: { $in: ['CONFIRMED', 'confirmed'] }, // Support both uppercase (new) and lowercase (legacy)
+=======
+      orderStatus: { $in: ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'] },
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       deliveryBoyId: null // Not yet assigned
     };
 
@@ -218,7 +222,12 @@ module.exports.acceptOrder = async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
     if (!['confirmed', 'CONFIRMED'].includes(order.orderStatus)) {
+=======
+    const validStatuses = ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'];
+    if (!validStatuses.includes(order.orderStatus)) {
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       return res.status(400).json({
         success: false,
         message: `Order cannot be accepted. Current status: ${order.orderStatus}`
@@ -244,7 +253,11 @@ module.exports.acceptOrder = async (req, res) => {
       { 
         _id: orderId,
         deliveryBoyId: null, // Ensure not already assigned
+<<<<<<< HEAD
         orderStatus: { $in: ['confirmed', 'CONFIRMED'] }
+=======
+        orderStatus: { $in: validStatuses }
+>>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       },
       {
         deliveryBoyId: deliveryBoyId,
