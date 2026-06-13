@@ -14,4 +14,5 @@ router.put(
 );
 router.get("/profile", authMiddleware.userMiddlewere, userController.profile);
 router.get("/logout", authMiddleware.userMiddlewere, userController.logout);
+router.post("/google-login", userController.googleLogin);
 module.exports = router;

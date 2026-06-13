@@ -306,6 +306,77 @@ module.exports.login = async (req, res) => {
   }
 };
 
+module.exports.googleLogin = async (req, res) => {
+  try {
+    const { email, fullname, phone } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: "Email is required for Google login" });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    let user = await userModel.findOne({ email: trimmedEmail });
+
+    if (!user) {
+      // Generate a random password for Google-authenticated users
+      const randomPassword = crypto.randomBytes(8).toString("hex");
+      const hashedPassword = await userModel.hashPassword(randomPassword);
+      
+      // If phone is not provided, generate a dummy 10-digit phone number to satisfy the schema
+      // A unique number starting with 9 to appear somewhat realistic
+      const dummyPhone = "9" + Math.floor(Math.random() * 1000000000).toString().padStart(9, "0");
+      
+      const userData = {
+        fullname: fullname ? fullname.trim() : email.split("@")[0],
+        email: trimmedEmail,
+        phone: phone ? phone.trim() : dummyPhone,
+        password: hashedPassword,
+        role: "user",
+        accountStatus: "active",
+        roleDetails: {
+          user: {
+            userAddress: ""
+          }
+        }
+      };
+      
+      user = await userModel.create(userData);
+    } else {
+      if (typeof user.isLoginAllowed === 'function' && !user.isLoginAllowed()) {
+         return res.status(403).json({ message: "Your account is not active." });
+      }
+    }
+
+    const token = await user.generateAuthToken();
+    
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.resetPasswordToken;
+    delete userResponse.resetPasswordExpire;
+    
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      user: userResponse,
+      token,
+      status: 'active'
+    });
+  } catch (error) {
+    console.error("Google login error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during Google login",
+      error: error.message
+    });
+  }
+};
+
 module.exports.profile = async (req, res) => {
   try {
     // req.user only contains decoded JWT data (_id, role, effectiveStatus)

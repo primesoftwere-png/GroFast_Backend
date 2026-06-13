@@ -39,6 +39,7 @@ const configureRoutes = (app) => {
 
   // Direct category routes (for convenience)
   app.get(`${apiPrefix}/categories/with-count`, customerController.getCategoriesWithProductCount);
+  app.get(`${apiPrefix}/categories/structured`, customerController.getStructuredCategories);
   app.get(`${apiPrefix}/categories/:id`, customerController.getCategoryById);
   app.get(`${apiPrefix}/categories`, customerController.getAllCategories);
 

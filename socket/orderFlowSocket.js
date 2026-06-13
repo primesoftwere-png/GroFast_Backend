@@ -426,4 +426,92 @@ async function markDeliveryBoyOffline(userId) {
   }
 }
 
-module.exports = { initializeOrderFlowSocket };
+/**
+ * Emit order accepted status to customer
+ */
+function emitOrderAcceptedToCustomer(io, customerId, data) {
+  if (io && customerId) {
+    io.to(customerId.toString()).emit('order-status', data);
+  }
+}
+
+/**
+ * Emit delivery request to nearby delivery boys
+ */
+function emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, data) {
+  if (io && deliveryBoyIds && deliveryBoyIds.length > 0) {
+    deliveryBoyIds.forEach(id => {
+      io.to(id.toString()).emit('delivery-request', data);
+    });
+  }
+}
+
+/**
+ * Emit order ready for pickup to customer and delivery boy
+ */
+function emitOrderReady(io, customerId, deliveryBoyId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-status', data);
+    if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-ready', data);
+  }
+}
+
+/**
+ * Emit order cancelled to customer and delivery boy
+ */
+function emitOrderCancelled(io, customerId, deliveryBoyId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-status', data);
+    if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-cancelled', data);
+  }
+}
+
+/**
+ * Emit delivery boy assigned to customer and shopkeeper
+ */
+function emitDeliveryBoyAssigned(io, customerId, shopId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('delivery-assigned', data);
+    if (shopId) io.to(shopId.toString()).emit('delivery-assigned', data);
+  }
+}
+
+/**
+ * Emit order out for delivery to customer
+ */
+function emitOrderOutForDelivery(io, customerId, data) {
+  if (io && customerId) {
+    io.to(customerId.toString()).emit('order-out-for-delivery', data);
+  }
+}
+
+/**
+ * Emit order delivered to customer and shopkeeper
+ */
+function emitOrderDelivered(io, customerId, shopId, data) {
+  if (io) {
+    if (customerId) io.to(customerId.toString()).emit('order-delivered', data);
+    if (shopId) io.to(shopId.toString()).emit('order-delivered', data);
+  }
+}
+
+/**
+ * Cancel delivery requests to other delivery boys
+ */
+function cancelDeliveryRequests(io, data) {
+  if (io) {
+    io.to('delivery-room').emit('delivery-request-cancelled', data);
+  }
+}
+
+module.exports = { 
+  initializeOrderFlowSocket,
+  emitOrderAcceptedToCustomer,
+  emitDeliveryRequestToNearbyDeliveryBoys,
+  emitOrderReady,
+  emitOrderCancelled,
+  emitDeliveryBoyAssigned,
+  emitOrderOutForDelivery,
+  emitOrderDelivered,
+  cancelDeliveryRequests
+};

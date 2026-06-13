@@ -39,7 +39,7 @@ module.exports.getAvailableOrders = async (req, res) => {
 
     // Build query for available orders
     const query = {
-      orderStatus: 'confirmed',
+      orderStatus: { $in: ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'] },
       deliveryBoyId: null // Not yet assigned
     };
 
@@ -217,7 +217,8 @@ module.exports.acceptOrder = async (req, res) => {
       });
     }
 
-    if (order.orderStatus !== 'confirmed') {
+    const validStatuses = ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'];
+    if (!validStatuses.includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: `Order cannot be accepted. Current status: ${order.orderStatus}`
@@ -243,7 +244,7 @@ module.exports.acceptOrder = async (req, res) => {
       { 
         _id: orderId,
         deliveryBoyId: null, // Ensure not already assigned
-        orderStatus: 'confirmed'
+        orderStatus: { $in: validStatuses }
       },
       {
         deliveryBoyId: deliveryBoyId,
