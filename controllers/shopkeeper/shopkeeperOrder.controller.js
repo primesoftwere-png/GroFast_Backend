@@ -6,6 +6,7 @@ const Shop = require('../../models/ShopKeeper/Shop');
 const ShopkeeperWallet = require('../../models/ShopKeeper/ShopkeeperWallet');
 const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
 const Notification = require('../../models/Customer/Notification');
+const { emitDeliveryRequestToNearbyDeliveryBoys } = require('../../socket/orderFlowSocket');
 
 const getOrderItemsForResponse = async (order) => {
   const orderItems = await OrderItem.find({ orderId: order._id })
@@ -446,31 +447,6 @@ module.exports.acceptOrder = async (req, res) => {
         );
 
         if (nearbyDeliveryBoys.length > 0) {
-<<<<<<< HEAD
-          // Emit to each nearby delivery boy
-          nearbyDeliveryBoys.forEach(db => {
-            if (db.userId) {
-              io.to(db.userId.toString()).emit('order-available', {
-                orderId: order._id,
-                orderNumber: order.orderNumber,
-                orderToken: order.orderToken,
-                pickupLocation: {
-                  shopName: shop.shopName,
-                  address: shop.address,
-                  lat: shop.location?.coordinates[1] || 0,
-                  lng: shop.location?.coordinates[0] || 0
-                },
-                deliveryLocation: {
-                  address: order.deliveryAddress?.address || 'Customer Address',
-                  lat: order.deliveryAddress?.lat || 0,
-                  lng: order.deliveryAddress?.lng || 0
-                },
-                distance: '2.5 km', // Calculate actual distance
-                estimatedEarnings: 50, // Calculate based on distance
-                expiresIn: 60 // 60 seconds to accept
-              });
-            }
-=======
           const deliveryBoyIds = nearbyDeliveryBoys.map(db => db.userId.toString());
           
           emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, {
@@ -491,7 +467,6 @@ module.exports.acceptOrder = async (req, res) => {
             distance: '2.5 km', // Calculate actual distance
             estimatedEarnings: 50, // Calculate based on distance
             expiresIn: 60 // 60 seconds to accept
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
           });
 
           console.log(`✓ Delivery requests sent to ${nearbyDeliveryBoys.length} nearby delivery boys`);
@@ -933,35 +908,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  */
 async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
   try {
-<<<<<<< HEAD
-    // Convert radius from kilometers to meters
-    const radiusMeters = radiusKm * 1000;
-
-    // We do not have currentLocation in DeliveryBoy schema, 
-    // so we skip the geospatial query and just return online delivery boys.
-    // In a production app, we would query the DeliveryBoyLocation model.
-    const nearbyDeliveryBoys = await DeliveryBoy.find({
-      isOnline: true,
-      isAvailable: true,
-      isBlocked: false
-    }).limit(10);
-
-    return nearbyDeliveryBoys;
-  } catch (error) {
-    console.error('Error finding nearby delivery boys:', error);
-    
-    // Fallback: Return all available delivery boys if geospatial query fails
-    try {
-      const availableDeliveryBoys = await DeliveryBoy.find({
-        isOnline: true,
-        isAvailable: true,
-        isBlocked: false
-      }).limit(10);
-      
-      return availableDeliveryBoys;
-    } catch (fallbackError) {
-      console.error('Fallback query also failed:', fallbackError);
-=======
     // Find all online and available delivery boys
     const availableDeliveryBoys = await DeliveryBoy.find({
       isOnline: true,
@@ -969,7 +915,6 @@ async function findNearbyDeliveryBoys(lat, lng, radiusKm = 5) {
     });
     
     if (availableDeliveryBoys.length === 0) {
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       return [];
     }
 

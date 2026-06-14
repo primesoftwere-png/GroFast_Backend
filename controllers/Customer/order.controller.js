@@ -839,15 +839,6 @@ module.exports.getOrderDetails = async (req, res) => {
 };
 
 /**
-<<<<<<< HEAD
- * Get order by token
- */
-module.exports.getOrderByToken = async (req, res) => {
-  try {
-    const { orderToken } = req.params;
-
-    const order = await Order.findOne({ orderToken })
-=======
  * Get recent order details by token or number
  */
 module.exports.getRecentOrder = async (req, res) => {
@@ -864,7 +855,6 @@ module.exports.getRecentOrder = async (req, res) => {
     }
 
     const order = await Order.findOne(query)
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       .populate('customerId', 'fullname phone email')
       .populate('shopId', 'fullname phone email shopName address')
       .populate('deliveryBoyId', 'fullname phone')
@@ -877,8 +867,6 @@ module.exports.getRecentOrder = async (req, res) => {
       });
     }
 
-<<<<<<< HEAD
-=======
     // Verify access
     const isCustomer = order.customerId._id.toString() === userId.toString();
     const isShop = order.shopId._id.toString() === userId.toString();
@@ -891,24 +879,16 @@ module.exports.getRecentOrder = async (req, res) => {
       });
     }
 
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
     res.json({
       success: true,
       data: order
     });
 
   } catch (error) {
-<<<<<<< HEAD
-    console.error('Error getting order by token:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get order details',
-=======
     console.error('Error getting recent order:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get recent order',
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       error: error.message
     });
   }
@@ -979,7 +959,7 @@ module.exports.trackDelivery = async (req, res) => {
     }
 
     // Check if order is in a state where it has a delivery boy
-    const validStatuses = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'];
+    const validStatuses = ['ASSIGNED', 'ASSIGNED_TO_DELIVERY', 'PICKED_UP', 'IN_TRANSIT', 'ON_THE_WAY'];
     if (!validStatuses.includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
@@ -1025,6 +1005,133 @@ module.exports.trackDelivery = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to track delivery',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get order by token
+ */
+module.exports.getOrderByToken = async (req, res) => {
+  try {
+    const { orderToken } = req.params;
+
+    const order = await Order.findOne({ orderToken })
+      .populate('customerId', 'fullname phone email')
+      .populate('shopId', 'fullname phone email shopName address')
+      .populate('deliveryBoyId', 'fullname phone')
+      .populate('deliveryAddressId');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: order
+    });
+
+  } catch (error) {
+    console.error('Error getting order by token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get order details',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get categorized orders (recent vs history)
+ */
+module.exports.getCategorizedOrders = async (req, res) => {
+  try {
+    // Accept userId from path params, query params, or token
+    const userIdParam = req.params.userId || req.query.userId || (req.user && req.user._id);
+    
+    if (!userIdParam) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId is required. Pass it as path param: /categorized/:userId'
+      });
+    }
+
+    // Convert string userId to mongoose ObjectId for proper matching
+    const mongoose = require('mongoose');
+    let userId;
+    try {
+      userId = new mongoose.Types.ObjectId(userIdParam);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid userId format'
+      });
+    }
+
+    const userRole = req.query.role || (req.user && req.user.role) || 'user';
+
+    // Dynamically filter based on user role
+    let query = {};
+    if (userRole === 'admin') {
+      query.shopId = userId; // Shopkeepers see orders for their shop
+    } else if (userRole === 'deliveryBoy') {
+      query.deliveryBoyId = userId; // Delivery boys see their assigned orders
+    } else if (userRole === 'superadmin') {
+      // Superadmin sees all orders, no filter needed
+      query = {}; 
+    } else {
+      // For customers - find all orders where this user is the customer
+      query.customerId = userId;
+    }
+
+    const orders = await Order.find(query)
+      .populate('shopId', 'fullname shopName phone')
+      .populate('customerId', 'fullname phone email')
+      .populate('deliveryBoyId', 'fullname phone')
+      .populate('deliveryAddressId')
+      .sort({ createdAt: -1 });
+
+    const recent = [];
+    const history = [];
+
+    const historyStatuses = ['DELIVERED', 'CANCELLED'];
+
+    orders.forEach(order => {
+      const status = (order.orderStatus || '').toUpperCase();
+      const orderObj = order.toObject(); // Convert to plain JSON object to add dynamic properties
+
+      if (historyStatuses.includes(status)) {
+        history.push(orderObj);
+      } else {
+        // Add dynamic properties for frontend tracking button
+        orderObj.showTrackingButton = true;
+        orderObj.actionButton = {
+          text: "Track Order",
+          url: `/tracking/${orderObj.orderToken || orderObj._id}`
+        };
+        
+        recent.push(orderObj);
+      }
+    });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      data: {
+        recent,
+        history
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting categorized orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get categorized orders',
       error: error.message
     });
   }

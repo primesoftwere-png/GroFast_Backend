@@ -141,4 +141,4 @@ ShopSchema.index({ latitude: 1, longitude: 1 });
 ShopSchema.index({ city: 1, status: 1 });
 ShopSchema.index({ businessType: 1, status: 1 });
 
-module.exports = mongoose.model('Shop', ShopSchema);
+module.exports = mongoose.models.Shop || mongoose.model('Shop', ShopSchema);

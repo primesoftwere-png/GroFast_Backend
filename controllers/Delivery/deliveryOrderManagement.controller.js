@@ -232,7 +232,7 @@ module.exports.pickupOrder = async (req, res) => {
       });
     }
 
-    if (order.pickupOTP.code !== pickupOTP) {
+    if (String(order.pickupOTP.code) !== String(pickupOTP)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid pickup OTP'
@@ -392,7 +392,7 @@ module.exports.completeDelivery = async (req, res) => {
       });
     }
 
-    if (order.deliveryOTP.code !== deliveryOTP) {
+    if (String(order.deliveryOTP.code) !== String(deliveryOTP)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid delivery OTP'

@@ -7,9 +7,9 @@ const Order = require('../models/Customer/Order');
 const Shopkeeper = require('../models/ShopKeeper/Shopkeeper');
 const DeliveryBoy = require('../models/DeliveryBoy/DeliveryBoy');
 const DeliveryBoyLocation = require('../models/DeliveryBoy/DeliveryBoyLocation');
-const Shopkeeper = require('../models/ShopKeeper/Shopkeeper');
 const Shop = require('../models/ShopKeeper/Shop');
 const Notification = require('../models/Customer/Notification');
+const DeliveryBoyNotification = require('../models/DeliveryBoy/DeliveryBoyNotification');
 
 /**
  * Initialize Socket.IO for real-time order flow
@@ -372,7 +372,7 @@ function initializeOrderFlowSocket(io) {
           },
           {
             deliveryBoyId: dbId,
-            orderStatus: 'DELIVERY_ASSIGNED',
+            orderStatus: 'ASSIGNED_TO_DELIVERY',
             deliveryBoyAssignedAt: new Date()
           },
           { new: true }
@@ -394,7 +394,7 @@ function initializeOrderFlowSocket(io) {
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
-          status: 'DELIVERY_ASSIGNED',
+          status: 'ASSIGNED_TO_DELIVERY',
           message: 'Delivery partner assigned',
           deliveryBoy: {
             name: deliveryBoy.userId.fullname,
@@ -421,7 +421,7 @@ function initializeOrderFlowSocket(io) {
         socket.emit('delivery-accept-success', {
           orderId: order._id,
           orderNumber: order.orderNumber,
-          status: 'DELIVERY_ASSIGNED',
+          status: 'ASSIGNED_TO_DELIVERY',
           otp: order.otp,
           shopDetails: {
             name: order.shopId.shopName || order.shopId.fullname,
@@ -445,7 +445,7 @@ function initializeOrderFlowSocket(io) {
               orderId: order._id,
               orderNumber: order.orderNumber,
               orderToken: order.orderToken,
-              status: 'DELIVERY_ASSIGNED',
+              status: 'ASSIGNED_TO_DELIVERY',
               deliveryBoyName: deliveryBoy.userId.fullname,
               deliveryBoyPhone: deliveryBoy.userId.phone,
               vehicleType: deliveryBoy.vehicleType,
@@ -463,19 +463,46 @@ function initializeOrderFlowSocket(io) {
             body: notifBody,
             orderId: order._id,
             orderNumber: order.orderNumber,
-            status: 'DELIVERY_ASSIGNED',
+            status: 'ASSIGNED_TO_DELIVERY',
             deliveryBoyName: deliveryBoy.userId.fullname,
             deliveryBoyPhone: deliveryBoy.userId.phone,
             isRead: false,
             timestamp: new Date()
           });
           console.log(`✓ Emitted notification event to shopkeeper: ${order.shopId._id}`);
+          
+          // 🔔 Save persistent notification for delivery boy
+          const dbNotifTitle = `✅ Order Assigned #${order.orderNumber}`;
+          const dbNotifBody = `You have successfully accepted order #${order.orderNumber}. Please proceed to the shop for pickup.`;
+
+          const savedDbNotif = await DeliveryBoyNotification.create({
+            deliveryBoyId: deliveryBoy.userId._id,
+            orderId: order._id,
+            title: dbNotifTitle,
+            message: dbNotifBody,
+            type: 'order_assigned',
+            priority: 'high'
+          });
+
+          io.to(deliveryBoy.userId._id.toString()).emit('notification', {
+            _id: savedDbNotif._id,
+            notificationType: 'delivery',
+            title: dbNotifTitle,
+            body: dbNotifBody,
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            status: 'ASSIGNED_TO_DELIVERY',
+            isRead: false,
+            timestamp: new Date()
+          });
+          console.log(`✓ Notification saved for delivery boy: ${deliveryBoy.userId._id}`);
+
         } catch (notifError) {
-          console.error(`⚠ Failed to save notification for shopkeeper:`, notifError.message);
+          console.error(`⚠ Failed to save notifications:`, notifError.message);
         }
 
         // Notify other delivery boys that order is taken
-        cancelDeliveryRequests(io, order._id, order.orderNumber);
+        cancelDeliveryRequests(io, { orderId: order._id, orderNumber: order.orderNumber, reason: 'Order taken by another delivery partner' });
 
         console.log(`✓ Order assigned successfully`);
 
@@ -605,6 +632,21 @@ function initializeOrderFlowSocket(io) {
 }
 
 // ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Calculate distance between two coordinates in km using Haversine formula
+ */
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI/180); 
+  const dLon = (lon2 - lon1) * (Math.PI/180); 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c; // Distance in km
+}
 
 /**
  * Mark delivery boy as online

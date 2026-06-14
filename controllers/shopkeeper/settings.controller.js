@@ -12,25 +12,31 @@ module.exports.getSettings = async (req, res) => {
 
     const user = await User.findById(userId).select('-password');
     const shopkeeper = await Shopkeeper.findOne({ userId });
-    const shop = await Shop.findOne({ shopkeeperId: shopkeeper._id });
-    const bankDetails = await ShopkeeperBankDetails.findOne({ shopkeeperId: shopkeeper._id });
+    
+    let shop = null;
+    let bankDetails = null;
+    
+    if (shopkeeper) {
+      shop = await Shop.findOne({ shopkeeperId: shopkeeper._id });
+      bankDetails = await ShopkeeperBankDetails.findOne({ shopkeeperId: shopkeeper._id });
+    }
 
     return res.status(200).json({
       success: true,
       message: 'Settings retrieved successfully',
       data: {
         user: user,
-        shop: {
-          shopName: shop?.shopName,
-          businessType: shop?.businessType,
-          openingTime: shop?.openingTime,
-          closingTime: shop?.closingTime,
-          isOpen: shop?.isOpen,
-          commissionRate: shop?.commissionRate,
-          status: shop?.status,
-          latitude: shop?.latitude,
-          longitude: shop?.longitude
-        },
+        shop: shop ? {
+          shopName: shop.shopName,
+          businessType: shop.businessType,
+          openingTime: shop.openingTime,
+          closingTime: shop.closingTime,
+          isOpen: shop.isOpen,
+          commissionRate: shop.commissionRate,
+          status: shop.status,
+          latitude: shop.latitude,
+          longitude: shop.longitude
+        } : null,
         bankDetails: bankDetails ? {
           accountHolderName: bankDetails.accountHolderName,
           bankAccountNumber: bankDetails.bankAccountNumber.slice(-4).padStart(bankDetails.bankAccountNumber.length, '*'),
@@ -331,20 +337,25 @@ module.exports.getWalletDetails = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const shopkeeper = await Shopkeeper.findOne({ userId });
+    let shopkeeper = await Shopkeeper.findOne({ userId });
     if (!shopkeeper) {
-      return res.status(404).json({
-        success: false,
-        message: 'Shopkeeper profile not found'
-      });
+      shopkeeper = { _id: null };
     }
 
-    const wallet = await ShopkeeperWallet.findOne({ shopkeeperId: shopkeeper._id });
+    let wallet = null;
+    if (shopkeeper._id) {
+      wallet = await ShopkeeperWallet.findOne({ shopkeeperId: shopkeeper._id });
+    }
+    
     if (!wallet) {
-      return res.status(404).json({
-        success: false,
-        message: 'Wallet not found'
-      });
+      wallet = {
+        balance: 0,
+        pendingAmount: 0,
+        totalEarnings: 0,
+        totalWithdrawn: 0,
+        lastPayoutAt: null,
+        currency: 'INR'
+      };
     }
 
     return res.status(200).json({
@@ -352,12 +363,12 @@ module.exports.getWalletDetails = async (req, res) => {
       message: 'Wallet details retrieved successfully',
       data: {
         wallet: {
-          balance: wallet.balance,
-          pendingAmount: wallet.pendingAmount,
-          totalEarnings: wallet.totalEarnings,
-          totalWithdrawn: wallet.totalWithdrawn,
-          lastPayoutAt: wallet.lastPayoutAt,
-          currency: wallet.currency
+          balance: wallet.balance || 0,
+          pendingAmount: wallet.pendingAmount || 0,
+          totalEarnings: wallet.totalEarnings || 0,
+          totalWithdrawn: wallet.totalWithdrawn || 0,
+          lastPayoutAt: wallet.lastPayoutAt || null,
+          currency: wallet.currency || 'INR'
         }
       }
     });

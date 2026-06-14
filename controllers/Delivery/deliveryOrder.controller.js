@@ -25,26 +25,46 @@ module.exports.getAvailableOrders = async (req, res) => {
 
     // Check if online and available
     if (!deliveryBoy.isOnline) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be online to view available orders"
+      return res.status(200).json({
+        success: true,
+        message: "You must be online to view available orders",
+        data: {
+          orders: [],
+          count: 0
+        }
       });
     }
 
-    if (!deliveryBoy.isAvailable) {
-      return res.status(403).json({
-        success: false,
-        message: "You are currently unavailable. Complete your active order first."
-      });
+    // Check if they actually have an active order blocking them
+    if (deliveryBoy.activeOrderId) {
+      // Verify if the active order is actually still active
+      const activeOrder = await Order.findById(deliveryBoy.activeOrderId);
+      const isActive = activeOrder && ['ASSIGNED_TO_DELIVERY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(activeOrder.orderStatus);
+      
+      if (isActive) {
+        return res.status(200).json({
+          success: true,
+          message: "You are currently unavailable. Complete your active order first.",
+          data: {
+            orders: [],
+            count: 0
+          }
+        });
+      } else {
+        // Auto-heal: The active order is no longer active, clear it
+        deliveryBoy.activeOrderId = null;
+        deliveryBoy.isAvailable = true;
+        await deliveryBoy.save();
+      }
+    } else if (!deliveryBoy.isAvailable && deliveryBoy.isOnline) {
+      // Auto-heal: If no active order and online, they should be available
+      deliveryBoy.isAvailable = true;
+      await deliveryBoy.save();
     }
 
     // Build query for available orders
     const query = {
-<<<<<<< HEAD
-      orderStatus: { $in: ['CONFIRMED', 'confirmed'] }, // Support both uppercase (new) and lowercase (legacy)
-=======
       orderStatus: { $in: ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'] },
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       deliveryBoyId: null // Not yet assigned
     };
 
@@ -126,7 +146,7 @@ module.exports.getAssignedOrders = async (req, res) => {
 
     // Filter by status if provided
     if (status) {
-      const validStatuses = ['ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'];
+      const validStatuses = ['ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled', 'ASSIGNED_TO_DELIVERY', 'assigned_to_delivery'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
           success: false,
@@ -137,7 +157,7 @@ module.exports.getAssignedOrders = async (req, res) => {
     } else {
       // Default: show active orders only
       query.orderStatus = { 
-        $in: ['ready_for_pickup', 'picked_up', 'out_for_delivery'] 
+        $in: ['ready_for_pickup', 'picked_up', 'out_for_delivery', 'ASSIGNED_TO_DELIVERY', 'ASSIGNED', 'DELIVERY_ASSIGNED', 'assigned_to_delivery'] 
       };
     }
 
@@ -189,20 +209,36 @@ module.exports.acceptOrder = async (req, res) => {
       });
     }
 
-    // Check if online and available
-    if (!deliveryBoy.isOnline || !deliveryBoy.isAvailable) {
+    // Auto-heal stuck state if they are online but marked unavailable
+    if (deliveryBoy.isOnline && !deliveryBoy.isAvailable && !deliveryBoy.activeOrderId) {
+      deliveryBoy.isAvailable = true;
+      await deliveryBoy.save();
+    }
+
+    // Check if online
+    if (!deliveryBoy.isOnline) {
       return res.status(403).json({
         success: false,
-        message: "You must be online and available to accept orders"
+        message: "You must be online to accept orders"
       });
     }
 
     // Check if already has active order
     if (deliveryBoy.activeOrderId) {
-      return res.status(403).json({
-        success: false,
-        message: "You already have an active order. Complete it first."
-      });
+      const activeOrder = await Order.findById(deliveryBoy.activeOrderId);
+      const isActive = activeOrder && ['ASSIGNED_TO_DELIVERY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(activeOrder.orderStatus);
+      
+      if (isActive) {
+        return res.status(403).json({
+          success: false,
+          message: "You already have an active order. Complete it first."
+        });
+      } else {
+        // Auto-heal
+        deliveryBoy.activeOrderId = null;
+        deliveryBoy.isAvailable = true;
+        await deliveryBoy.save();
+      }
     }
 
     // Get order
@@ -222,12 +258,8 @@ module.exports.acceptOrder = async (req, res) => {
       });
     }
 
-<<<<<<< HEAD
-    if (!['confirmed', 'CONFIRMED'].includes(order.orderStatus)) {
-=======
     const validStatuses = ['confirmed', 'CONFIRMED', 'ACCEPTED', 'accepted'];
     if (!validStatuses.includes(order.orderStatus)) {
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       return res.status(400).json({
         success: false,
         message: `Order cannot be accepted. Current status: ${order.orderStatus}`
@@ -253,11 +285,7 @@ module.exports.acceptOrder = async (req, res) => {
       { 
         _id: orderId,
         deliveryBoyId: null, // Ensure not already assigned
-<<<<<<< HEAD
-        orderStatus: { $in: ['confirmed', 'CONFIRMED'] }
-=======
         orderStatus: { $in: validStatuses }
->>>>>>> 3376a5fbad1ef12cf69908f7142dc268ce605e3b
       },
       {
         deliveryBoyId: deliveryBoyId,
