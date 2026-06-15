@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const advertisementController = require('../../controllers/Shopkeeper/advertisement.controller');
+const advertisementController = require('../../controllers/shopkeeper/advertisement.controller');
 const upload = require('../../middlewere/uploadMiddleware');
 const authMiddleware = require('../../middlewere/user.middlewere');
 
