@@ -35,33 +35,30 @@ app.use(
 );
 app.use("/uploads", express.static("uploads"));
 
-// Database Connection with Error Handling
-(async () => {
-  try {
-    await MongoConnection();
-    
-    // Make io accessible in routes
-    app.set('io', io);
+// Make io accessible in routes
+app.set('io', io);
 
-    // Initialize Socket.IO for order flow
-    initializeOrderFlowSocket(io);
-    console.log("✓ Socket.IO Order Flow initialized");
+// Initialize Socket.IO for order flow
+initializeOrderFlowSocket(io);
+console.log("✓ Socket.IO Order Flow initialized");
 
-    // Configure All Routes (Modular and Centralized)
-    configureRoutes(app);
+// Configure All Routes (Modular and Centralized)
+configureRoutes(app);
 
-    // Server Startup with Error Handling
-    const PORT = process.env.PORT || 8000;
-    server.listen(PORT, () => {
-      console.log(`✅ Server is running on port ${PORT}`);
-    }).on("error", (error) => {
-      if (error.syscall !== "listen") {
-        throw error;
-      }
-      console.error("❌ Server startup error:", error);
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error.message);
-    process.exit(1); // Exit process on DB failure for production safety
+// Server Startup with Error Handling
+const PORT = process.env.PORT || 8000;
+server.listen(PORT, () => {
+  console.log(`✅ Server is running on port ${PORT}`);
+}).on("error", (error) => {
+  if (error.syscall !== "listen") {
+    throw error;
   }
-})();
+  console.error("❌ Server startup error:", error);
+});
+
+// Database Connection with Error Handling
+MongoConnection().catch((error) => {
+  console.error("❌ Failed to connect to database:", error.message);
+  // Do not exit process immediately if you want Render to see the port open.
+  // The app will remain up, and DB reconnection or health checks will handle the rest.
+});
