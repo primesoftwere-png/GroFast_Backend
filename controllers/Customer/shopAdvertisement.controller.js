@@ -1,5 +1,5 @@
 // controllers/Customer/shopAdvertisement.controller.js
-const ShopAdvertisement = require('../../models/Shopkeeper/ShopAdvertisement');
+const ShopAdvertisement = require('../../models/ShopKeeper/ShopAdvertisement');
 
 exports.getActiveAds = async (req, res) => {
   try {

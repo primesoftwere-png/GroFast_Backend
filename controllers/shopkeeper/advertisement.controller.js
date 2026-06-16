@@ -1,6 +1,6 @@
 // controllers/Shopkeeper/advertisement.controller.js
-const ShopAdvertisement = require('../../models/Shopkeeper/ShopAdvertisement');
-const Shop = require('../../models/Shopkeeper/Shop');
+const ShopAdvertisement = require('../../models/ShopKeeper/ShopAdvertisement');
+const Shop = require('../../models/ShopKeeper/Shop');
 
 exports.createAd = async (req, res) => {
   try {
