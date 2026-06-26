@@ -64,6 +64,18 @@ router.get(
   customerController.getProfileById
 );
 
+// ✅ Get nearby shops
+router.get(
+  "/nearby-shops",
+  customerController.getNearbyShops
+);
+
+// ✅ Get shop by ID
+router.get(
+  "/shop/:id",
+  customerController.getShopById
+);
+
 // ==================== ADDRESS MANAGEMENT ROUTES ====================
 
 // ✅ Add new address

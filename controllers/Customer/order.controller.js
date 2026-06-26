@@ -8,6 +8,7 @@ const Cart = require('../../models/Customer/Cart');
 const CustomerAddress = require('../../models/Customer/CustomerAddress');
 const Notification = require('../../models/Customer/Notification');
 const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
+const Shop = require('../../models/ShopKeeper/Shop');
 
 async function resolveShopkeeperTarget(shopId) {
   let shopUser = await User.findById(shopId);
@@ -958,28 +959,30 @@ module.exports.trackDelivery = async (req, res) => {
       });
     }
 
-    // Check if order is in a state where it has a delivery boy
-    const validStatuses = ['ASSIGNED', 'ASSIGNED_TO_DELIVERY', 'PICKED_UP', 'IN_TRANSIT', 'ON_THE_WAY'];
-    if (!validStatuses.includes(order.orderStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: `Tracking not available for order status: ${order.orderStatus}`
-      });
-    }
-
+    // If order doesn't have a delivery boy assigned yet, return the status without location
     if (!order.deliveryBoyId) {
-      return res.status(404).json({
-        success: false,
-        message: 'Delivery boy not assigned yet'
+      return res.json({
+        success: true,
+        data: {
+          orderId: order._id,
+          orderStatus: order.orderStatus,
+          deliveryBoyId: null,
+          location: null
+        }
       });
     }
 
     const location = await DeliveryBoyLocation.findOne({ deliveryBoyId: order.deliveryBoyId });
 
     if (!location) {
-      return res.status(404).json({
-        success: false,
-        message: 'Delivery boy location not found'
+      return res.json({
+        success: true,
+        data: {
+          orderId: order._id,
+          orderStatus: order.orderStatus,
+          deliveryBoyId: order.deliveryBoyId,
+          location: null
+        }
       });
     }
 
@@ -1017,17 +1020,43 @@ module.exports.getOrderByToken = async (req, res) => {
   try {
     const { orderToken } = req.params;
 
-    const order = await Order.findOne({ orderToken })
+    let order = await Order.findOne({ orderToken })
       .populate('customerId', 'fullname phone email')
-      .populate('shopId', 'fullname phone email shopName address')
+      .populate('shopId', 'fullname phone email')
       .populate('deliveryBoyId', 'fullname phone')
-      .populate('deliveryAddressId');
+      .populate('deliveryAddressId')
+      .lean();
 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
+    }
+
+    // Fetch complete shop details and append to shopId object
+    if (order.shopId && order.shopId._id) {
+      const shopkeeper = await Shopkeeper.findOne({ userId: order.shopId._id });
+      if (shopkeeper) {
+        const shop = await Shop.findOne({ shopkeeperId: shopkeeper._id });
+        if (shop) {
+          order.shopId = {
+            ...order.shopId,
+            shopName: shop.shopName,
+            shopImage: shop.shopImage,
+            shopAddress: shop.shopAddress,
+            city: shop.city,
+            pincode: shop.pincode,
+            latitude: shop.latitude,
+            longitude: shop.longitude,
+            businessType: shop.businessType,
+            openingTime: shop.openingTime,
+            closingTime: shop.closingTime,
+            isOpen: shop.isOpen,
+            rating: shop.rating
+          };
+        }
+      }
     }
 
     res.json({

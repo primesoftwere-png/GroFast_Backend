@@ -39,7 +39,7 @@ module.exports.addCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid status. Must be one of: " + validStatuses.join(', ') });
     }
 
-    const categoryImage = req.file ? req.file.filename : null;
+    const categoryImage = req.file ? "uploads/" + req.file.filename : null;
 
     // Create category directly
     const category = new Category({
@@ -206,7 +206,7 @@ module.exports.updateCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const categoryImage = req.file ? req.file.filename : null;
+    const categoryImage = req.file ? "uploads/" + req.file.filename : null;
 
     const updateData = {
       ...(categoryName && { categoryName: categoryName.trim() }),

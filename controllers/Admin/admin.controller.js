@@ -18,7 +18,7 @@ module.exports.addProduct = async (req, res) => {
     console.log("req.body:", req.body);
     console.log("req.file:", req.file);
 
-    const productImage = req.file ? req.file.filename : null;
+    const productImage = req.file ? "uploads/" + req.file.filename : null;
     console.log("productImage:", productImage);
 
     if (
@@ -91,7 +91,7 @@ module.exports.addCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid parent category ID" });
     }
 
-    const categoryImage = req.file ? req.file.filename : null;
+    const categoryImage = req.file ? "uploads/" + req.file.filename : null;
 
     // Create category directly
     const category = new Category({
@@ -133,7 +133,7 @@ module.exports.updateProduct = async (req, res) => {
 
     console.log("req.body:", req.body);
     if (req.file) {
-      updateData.productImage = req.file.filename;
+      updateData.productImage = "uploads/" + req.file.filename;
     }
 
     if (updateData.productUnit && updateData.productUnit.trim() !== '') {
@@ -211,7 +211,7 @@ module.exports.updateCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const categoryImage = req.file ? req.file.filename : null;
+    const categoryImage = req.file ? "uploads/" + req.file.filename : null;
 
     const updateData = {
       ...(categoryName && { categoryName: categoryName.trim() }),

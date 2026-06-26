@@ -11,6 +11,8 @@ const settingsRoutes = require("./settings.router");
 const incomeRoutes = require("./income.router");
 const settlementRoutes = require("./settlement.router");
 const advertisementRoutes = require("./advertisement.router");
+const dashboardRoutes = require("./dashboard.router");
+
 
 // Mount sub-routes
 router.use("/auth", authRoutes); // Authentication & Registration
@@ -22,5 +24,7 @@ router.use("/", settingsRoutes); // Settings & Wallet
 router.use("/", incomeRoutes); // Income management
 router.use("/", settlementRoutes); // Settlement management
 router.use("/advertisement", advertisementRoutes); // Advertisement management
+router.use("/", dashboardRoutes); // Dashboard management
+
 
 module.exports = router;

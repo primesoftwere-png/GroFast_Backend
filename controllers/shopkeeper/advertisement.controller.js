@@ -1,10 +1,16 @@
 // controllers/Shopkeeper/advertisement.controller.js
 const ShopAdvertisement = require('../../models/ShopKeeper/ShopAdvertisement');
 const Shop = require('../../models/ShopKeeper/Shop');
+const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 
 exports.createAd = async (req, res) => {
   try {
-    const shopkeeperId = req.user._id; // Assuming auth middleware sets req.user
+    const userId = req.user._id; // Assuming auth middleware sets req.user
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({ success: false, message: 'Shopkeeper not found' });
+    }
+    const shopkeeperId = shopkeeper._id;
     const { title, type, targetUrl, status, validFrom, validUntil } = req.body;
     
     // Find shop associated with this shopkeeper
@@ -47,7 +53,12 @@ exports.createAd = async (req, res) => {
 
 exports.getAds = async (req, res) => {
   try {
-    const shopkeeperId = req.user._id;
+    const userId = req.user._id;
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({ success: false, message: 'Shopkeeper not found' });
+    }
+    const shopkeeperId = shopkeeper._id;
     const ads = await ShopAdvertisement.find({ shopkeeperId }).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -63,7 +74,12 @@ exports.getAds = async (req, res) => {
 exports.getAdById = async (req, res) => {
   try {
     const { id } = req.params;
-    const shopkeeperId = req.user._id;
+    const userId = req.user._id;
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({ success: false, message: 'Shopkeeper not found' });
+    }
+    const shopkeeperId = shopkeeper._id;
 
     const ad = await ShopAdvertisement.findOne({ _id: id, shopkeeperId });
 
@@ -84,7 +100,12 @@ exports.getAdById = async (req, res) => {
 exports.updateAd = async (req, res) => {
   try {
     const { id } = req.params;
-    const shopkeeperId = req.user._id;
+    const userId = req.user._id;
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({ success: false, message: 'Shopkeeper not found' });
+    }
+    const shopkeeperId = shopkeeper._id;
     const { title, type, targetUrl, status, validFrom, validUntil } = req.body;
 
     let ad = await ShopAdvertisement.findOne({ _id: id, shopkeeperId });
@@ -122,7 +143,12 @@ exports.updateAd = async (req, res) => {
 exports.deleteAd = async (req, res) => {
   try {
     const { id } = req.params;
-    const shopkeeperId = req.user._id;
+    const userId = req.user._id;
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({ success: false, message: 'Shopkeeper not found' });
+    }
+    const shopkeeperId = shopkeeper._id;
 
     const ad = await ShopAdvertisement.findOneAndDelete({ _id: id, shopkeeperId });
 

@@ -10,7 +10,10 @@ const superadminRouter = require("../router/SuperAdmin/superadmin.router.js");
 const shopkeeperRoutes = require("../router/Shopkeeper/index.js");
 const adminRouter = require("../router/Admin/index.js");
 const wishlistRouter = require("../router/Customer/wishlist.router.js");
+const couponRouter = require("../router/Customer/coupon.router.js");
 const shopAdvertisementRouter = require("../router/Customer/shopAdvertisement.router.js");
+const chatRouter = require("./chat.router.js");
+const aiRouter = require("./AI/ai.router.js");
 
 // Import customer controller for direct product routes
 const customerController = require("../controllers/Customer/customer.controller");
@@ -36,6 +39,9 @@ const configureRoutes = (app) => {
   app.use(`${apiPrefix}/superadmin`, superadminRouter);
   app.use(`${apiPrefix}/wishlist`, wishlistRouter);
   app.use(`${apiPrefix}/shop-advertisements`, shopAdvertisementRouter);
+  app.use(`${apiPrefix}/chat`, chatRouter);
+  app.use(`${apiPrefix}/ai`, aiRouter);
+  app.use(`${apiPrefix}/customer/coupons`, couponRouter);
 
   // Direct product routes (for convenience)
   app.get(`${apiPrefix}/products/bestsellers`, customerController.getBestsellerProducts);

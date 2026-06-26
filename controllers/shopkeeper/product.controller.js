@@ -19,7 +19,7 @@ module.exports.addProduct = async (req, res) => {
     console.log("req.file:", req.file);
 
     // *** THE FIX: Prioritize uploaded file, fallback to body URL string ***
-    let productImage = req.file ? req.file.filename : imageFromBody;
+    let productImage = req.file ? "uploads/" + req.file.filename : imageFromBody;
 
     console.log("productImage:", productImage);
 
@@ -165,7 +165,7 @@ module.exports.updateProduct = async (req, res) => {
 
     console.log("req.body:", req.body);
     if (req.file) {
-      updateData.productImage = req.file.filename;
+      updateData.productImage = "uploads/" + req.file.filename;
     } else if (updateData.productImage) { // *** THE FIX: Also handle URL update from body ***
       // Keep as-is if already provided
     }

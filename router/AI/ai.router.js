@@ -6,4 +6,10 @@ const authMiddleware = require('../../middlewere/user.middlewere'); // Assuming 
 // Route to get AI product suggestions based on cart and past orders
 router.get('/suggest-products', authMiddleware.userMiddlewere, aiController.suggestProducts);
 
+// Route to search products using AI (accessible without auth for Navbar search)
+router.post('/search', aiController.searchProducts);
+
+// Route for AI Chat that returns products and a conversational message
+router.post('/chat', aiController.chatProducts);
+
 module.exports = router;

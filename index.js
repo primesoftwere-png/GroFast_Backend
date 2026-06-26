@@ -10,6 +10,7 @@ const { Server } = require("socket.io");
 const MongoConnection = require("./db/db.js");
 
 const { initializeOrderFlowSocket } = require("./socket/orderFlowSocket.js"); // New order flow socket
+const { initializeChatSocket } = require("./socket/chatSocket.js");
 
 const configureRoutes = require("./router/index.js"); // Centralized route configuration
 
@@ -41,6 +42,10 @@ app.set('io', io);
 // Initialize Socket.IO for order flow
 initializeOrderFlowSocket(io);
 console.log("✓ Socket.IO Order Flow initialized");
+
+// Initialize Socket.IO for P2P Chat
+initializeChatSocket(io);
+console.log("✓ Socket.IO Chat initialized");
 
 // Configure All Routes (Modular and Centralized)
 configureRoutes(app);

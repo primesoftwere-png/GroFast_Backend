@@ -5,11 +5,13 @@ const OrderItem = require("../../models/Customer/OrderItem");
 const Order = require("../../models/Customer/Order");
 const CustomerAddress = require("../../models/Customer/CustomerAddress");
 const User = require("../../models/Auth/User");
+const Shop = require("../../models/ShopKeeper/Shop");
+const mongoose = require("mongoose");
 
 // ✅ Get all products with optional category filter
 module.exports.getAllProducts = async (req, res) => {
   try {
-    const { page, limit, search, category } = req.query;
+    const { page, limit, search, category, shopkeeperId } = req.query;
 
     // Get all products with pagination
     let pageNum = parseInt(page) || 1;
@@ -21,6 +23,28 @@ module.exports.getAllProducts = async (req, res) => {
     // Add search filter
     if (search) {
       query.productName = { $regex: search, $options: "i" };
+    }
+
+    // Add shopkeeper filter
+    if (shopkeeperId) {
+      if (mongoose.Types.ObjectId.isValid(shopkeeperId)) {
+        // Check if it's a Shop ID
+        const shop = await Shop.findById(shopkeeperId).populate('shopkeeperId');
+        if (shop && shop.shopkeeperId && shop.shopkeeperId.userId) {
+          query.createdBy = new mongoose.Types.ObjectId(shop.shopkeeperId.userId);
+        } else {
+          // Check if it's a Shopkeeper ID directly
+          const shopkeeper = await mongoose.model('Shopkeeper').findById(shopkeeperId);
+          if (shopkeeper && shopkeeper.userId) {
+            query.createdBy = new mongoose.Types.ObjectId(shopkeeper.userId);
+          } else {
+            // Otherwise, assume it's already a User ID
+            query.createdBy = new mongoose.Types.ObjectId(shopkeeperId);
+          }
+        }
+      } else {
+        query.createdBy = shopkeeperId;
+      }
     }
 
     // Add category filter by category name (case-insensitive exact match)
@@ -912,6 +936,105 @@ module.exports.getDefaultAddress = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve default address",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Get Nearby Shops
+module.exports.getNearbyShops = async (req, res) => {
+  try {
+    const { lat, lng, maxDistance = 50 } = req.query; // maxDistance in km
+    
+    // Get all shops (removed status: 'ACTIVE' to allow fetching all stores)
+    const shops = await Shop.find({})
+      .populate('shopkeeperId', 'fullname profileImage')
+      .lean();
+      
+    let nearbyShops = shops;
+    
+    // If lat and lng are provided, calculate distance using Haversine
+    if (lat && lng) {
+      const userLat = parseFloat(lat);
+      const userLng = parseFloat(lng);
+      
+      nearbyShops = shops.map(shop => {
+        // Safe check for missing coordinates
+        if (!shop.latitude || !shop.longitude) {
+          return { ...shop, distance: 999999 };
+        }
+        
+        const R = 6371; // Radius of the earth in km
+        const dLat = (shop.latitude - userLat) * (Math.PI / 180);  
+        const dLon = (shop.longitude - userLng) * (Math.PI / 180); 
+        const a = 
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(userLat * (Math.PI / 180)) * Math.cos(shop.latitude * (Math.PI / 180)) * 
+          Math.sin(dLon / 2) * Math.sin(dLon / 2)
+          ; 
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+        const distance = R * c; // Distance in km
+        
+        return {
+          ...shop,
+          distance: parseFloat(distance.toFixed(2))
+        };
+      })
+      .filter(shop => shop.distance <= parseFloat(maxDistance))
+      .sort((a, b) => a.distance - b.distance);
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: nearbyShops,
+      count: nearbyShops.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching nearby shops",
+      error: error.message
+    });
+  }
+};
+
+// ✅ Get Shop by ID
+module.exports.getShopById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid shop ID format",
+      });
+    }
+
+    const shop = await Shop.findById(id)
+      .populate({
+        path: 'shopkeeperId',
+        populate: {
+          path: 'userId',
+          select: 'fullname profileImage email phone'
+        }
+      })
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: shop,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching shop details",
       error: error.message,
     });
   }
