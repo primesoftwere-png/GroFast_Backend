@@ -62,9 +62,7 @@ DeliveryBoyLocationSchema.index({
   location: '2dsphere' 
 });
 
-DeliveryBoyLocationSchema.index({ 
-  deliveryBoyId: 1 
-});
+
 
 DeliveryBoyLocationSchema.index({ 
   orderId: 1 

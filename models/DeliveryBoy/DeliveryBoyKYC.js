@@ -115,7 +115,6 @@ DeliveryBoyKYCSchema.pre('save', function(next) {
 });
 
 // Index for faster queries
-DeliveryBoyKYCSchema.index({ deliveryBoyId: 1 });
 DeliveryBoyKYCSchema.index({ status: 1 });
 
 module.exports = mongoose.model('DeliveryBoyKYC', DeliveryBoyKYCSchema);
