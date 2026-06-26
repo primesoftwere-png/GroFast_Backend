@@ -9,7 +9,8 @@ const dns = require("dns");
 
 const MongoConnection = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
+    const mongoUri = process.env.MONGODB_URI || "mongodb+srv://shreyponkiya:shreyponkiya@cluster0.no2cj.mongodb.net/Grocery_Fast?retryWrites=true&w=majority&appName=Cluster0";
+    await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 5000,

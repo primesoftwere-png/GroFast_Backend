@@ -41,7 +41,6 @@ const CartSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-CartSchema.index({ userId: 1 });
 CartSchema.index({ 'products.productId': 1 });
 
 module.exports = mongoose.model('Cart', CartSchema);

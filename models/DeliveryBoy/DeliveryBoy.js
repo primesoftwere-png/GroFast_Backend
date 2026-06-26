@@ -96,7 +96,6 @@ DeliveryBoySchema.pre('save', function(next) {
 });
 
 // Index for faster queries
-DeliveryBoySchema.index({ userId: 1 });
 DeliveryBoySchema.index({ isOnline: 1, isAvailable: 1 });
 DeliveryBoySchema.index({ isBlocked: 1 });
 
