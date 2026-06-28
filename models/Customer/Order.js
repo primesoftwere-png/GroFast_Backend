@@ -50,7 +50,8 @@ const OrderSchema = new mongoose.Schema({
       'IN_TRANSIT',     // On the way to customer
       'OUT_FOR_DELIVERY',// On the way to customer (alternate)
       'DELIVERED',      // Successfully delivered
-      'CANCELLED'       // Order cancelled
+      'CANCELLED',      // Order cancelled
+      'EXPIRED'         // Order expired due to timeout
     ] 
   },
   
@@ -131,6 +132,7 @@ const OrderSchema = new mongoose.Schema({
   pickedUpAt: { type: Date },
   deliveredAt: { type: Date },
   cancelledAt: { type: Date },
+  expiredAt: { type: Date },
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

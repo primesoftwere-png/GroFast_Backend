@@ -353,6 +353,8 @@ module.exports.getWalletDetails = async (req, res) => {
         pendingAmount: 0,
         totalEarnings: 0,
         totalWithdrawn: 0,
+        totalOnlineEarnings: 0,
+        totalCashEarnings: 0,
         lastPayoutAt: null,
         currency: 'INR'
       };
@@ -367,6 +369,8 @@ module.exports.getWalletDetails = async (req, res) => {
           pendingAmount: wallet.pendingAmount || 0,
           totalEarnings: wallet.totalEarnings || 0,
           totalWithdrawn: wallet.totalWithdrawn || 0,
+          totalOnlineEarnings: wallet.totalOnlineEarnings || 0,
+          totalCashEarnings: wallet.totalCashEarnings || 0,
           lastPayoutAt: wallet.lastPayoutAt || null,
           currency: wallet.currency || 'INR'
         }
@@ -451,6 +455,73 @@ module.exports.requestPayout = async (req, res) => {
 
   } catch (error) {
     console.error('Request payout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// ✅ Add Wallet Balance (Top-up)
+module.exports.addWalletBalance = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid amount is required'
+      });
+    }
+
+    const shopkeeper = await Shopkeeper.findOne({ userId });
+    if (!shopkeeper) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shopkeeper profile not found'
+      });
+    }
+
+    let wallet = await ShopkeeperWallet.findOne({ shopkeeperId: shopkeeper._id });
+    if (!wallet) {
+      wallet = await ShopkeeperWallet.create({ shopkeeperId: shopkeeper._id });
+    }
+
+    const balanceBefore = wallet.balance || 0;
+    wallet.balance = balanceBefore + Number(amount);
+    await wallet.save();
+
+    // Create a transaction record for the deposit
+    const ShopkeeperTransaction = require('../../models/ShopKeeper/ShopkeeperTransaction');
+    await ShopkeeperTransaction.create({
+      shopkeeperId: shopkeeper._id,
+      type: 'ADJUSTMENT_CREDIT',
+      paymentMode: 'ONLINE',
+      amount: Number(amount),
+      platformCommission: 0,
+      netAmount: Number(amount),
+      balanceBefore: balanceBefore,
+      balanceAfter: wallet.balance,
+      description: 'Wallet top-up',
+      status: 'SUCCESS',
+      referenceId: 'TOPUP-' + Date.now()
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Balance added successfully',
+      data: {
+        wallet: {
+          balance: wallet.balance,
+          currency: wallet.currency
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Add wallet balance error:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error',

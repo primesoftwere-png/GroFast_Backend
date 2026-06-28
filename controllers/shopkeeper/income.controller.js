@@ -53,6 +53,100 @@ function mapPaymentMode(paymentMethod) {
 
 // ==================== API CONTROLLERS ====================
 
+// Internal function to process order income (called automatically on DELIVERED)
+module.exports.processOrderIncomeInternal = async (orderId) => {
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) return { success: false, message: 'Order not found' };
+
+    // Get shopkeeper via shopId which is userId or shopkeeperId
+    const shopkeeper = await Shopkeeper.findOne({ $or: [{ userId: order.shopId }, { _id: order.shopId }] });
+    if (!shopkeeper) return { success: false, message: 'Shopkeeper not found' };
+
+    const shop = await Shop.findOne({ shopkeeperId: shopkeeper._id });
+    const commissionRate = shop ? (shop.commissionRate || 10) : 10;
+
+    const existingTransaction = await ShopkeeperTransaction.findOne({
+      orderId: order._id,
+      shopkeeperId: shopkeeper._id,
+      type: 'ORDER_CREDIT'
+    });
+
+    if (existingTransaction) return { success: true, message: 'Already processed' };
+
+    const orderAmount = order.totalAmount;
+    const platformCommission = Math.round((orderAmount * commissionRate / 100) * 100) / 100;
+    const netAmount = Math.round((orderAmount - platformCommission) * 100) / 100;
+
+    const wallet = await getOrCreateWallet(shopkeeper._id);
+    const balanceBefore = wallet.balance;
+    const paymentMode = mapPaymentMode(order.paymentMethod);
+
+    switch (paymentMode) {
+      case 'CASH':
+        wallet.addCashEarnings(orderAmount, platformCommission);
+        break;
+      case 'ONLINE':
+        wallet.addOnlineEarnings(orderAmount, platformCommission);
+        break;
+      case 'WALLET':
+        wallet.addWalletEarnings(orderAmount, platformCommission);
+        break;
+      default:
+        wallet.addOnlineEarnings(orderAmount, platformCommission);
+    }
+    await wallet.save();
+
+    await ShopkeeperTransaction.create({
+      shopkeeperId: shopkeeper._id,
+      orderId: order._id,
+      type: 'ORDER_CREDIT',
+      paymentMode: paymentMode,
+      amount: orderAmount,
+      platformCommission: platformCommission,
+      netAmount: netAmount,
+      balanceBefore: balanceBefore,
+      balanceAfter: wallet.balance,
+      description: `Income from order ${order.orderNumber} (${paymentMode})`,
+      status: 'SUCCESS',
+      referenceId: order.orderToken,
+      metadata: {
+        orderNumber: order.orderNumber,
+        paymentMethod: order.paymentMethod,
+        commissionRate: commissionRate
+      }
+    });
+
+    const today = getStartOfDay();
+    const incomeField = paymentMode === 'CASH' ? 'cashIncome' 
+                      : paymentMode === 'WALLET' ? 'walletIncome' 
+                      : 'onlineIncome';
+    const countField = paymentMode === 'CASH' ? 'cashOrderCount' 
+                     : paymentMode === 'WALLET' ? 'walletOrderCount' 
+                     : 'onlineOrderCount';
+
+    await ShopkeeperDailyIncome.findOneAndUpdate(
+      { shopkeeperId: shopkeeper._id, date: today },
+      {
+        $inc: {
+          [incomeField]: netAmount,
+          [countField]: 1,
+          totalIncome: netAmount,
+          totalOrderCount: 1,
+          platformCommission: platformCommission,
+          netIncome: netAmount
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error processing internal order income:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // ✅ 1. Record Order Income (called when order is delivered)
 module.exports.recordOrderIncome = async (req, res) => {
   try {
@@ -228,6 +322,7 @@ module.exports.recordOrderIncome = async (req, res) => {
 module.exports.getIncomeOverview = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { startDate, endDate } = req.query;
 
     const profileResult = await getShopkeeperProfile(userId);
     if (profileResult.error) {
@@ -299,6 +394,40 @@ module.exports.getIncomeOverview = async (req, res) => {
       }
     ]);
 
+    // Custom period income
+    let customPeriodIncome = null;
+    if (startDate && endDate) {
+      const cStart = new Date(startDate);
+      cStart.setHours(0, 0, 0, 0);
+      const cEnd = new Date(endDate);
+      cEnd.setHours(23, 59, 59, 999);
+
+      const customIncome = await ShopkeeperDailyIncome.aggregate([
+        {
+          $match: {
+            shopkeeperId: shopkeeper._id,
+            date: { $gte: cStart, $lte: cEnd }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalIncome: { $sum: '$totalIncome' },
+            cashIncome: { $sum: '$cashIncome' },
+            onlineIncome: { $sum: '$onlineIncome' },
+            walletIncome: { $sum: '$walletIncome' },
+            totalOrders: { $sum: '$totalOrderCount' },
+            platformCommission: { $sum: '$platformCommission' },
+            netIncome: { $sum: '$netIncome' }
+          }
+        }
+      ]);
+      customPeriodIncome = customIncome[0] || {
+        totalIncome: 0, cashIncome: 0, onlineIncome: 0, walletIncome: 0,
+        totalOrders: 0, platformCommission: 0, netIncome: 0
+      };
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Income overview retrieved successfully',
@@ -332,6 +461,7 @@ module.exports.getIncomeOverview = async (req, res) => {
           totalIncome: 0, cashIncome: 0, onlineIncome: 0, walletIncome: 0,
           totalOrders: 0, platformCommission: 0, netIncome: 0
         },
+        customPeriod: customPeriodIncome,
         allTime: {
           totalEarnings: wallet.totalEarnings,
           totalCashEarnings: wallet.totalCashEarnings,

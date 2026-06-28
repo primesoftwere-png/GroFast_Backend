@@ -51,6 +51,9 @@ console.log("✓ Socket.IO Chat initialized");
 // Configure All Routes (Modular and Centralized)
 configureRoutes(app);
 
+// Initialize Cron Jobs
+require("./cron/orderExpiryCron.js");
+
 // Server Startup with Error Handling
 const PORT = process.env.PORT || 8000;
 server.listen(PORT, '0.0.0.0', () => {

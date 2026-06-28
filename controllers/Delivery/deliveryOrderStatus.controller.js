@@ -5,6 +5,7 @@ const DeliveryBoyWallet = require("../../models/DeliveryBoy/DeliveryBoyWallet");
 const WalletTransaction = require("../../models/DeliveryBoy/WalletTransaction");
 const OrderOTP = require("../../models/DeliveryBoy/OrderOTP");
 const DeliveryBoyNotification = require("../../models/DeliveryBoy/DeliveryBoyNotification");
+const SettlementEngine = require("../../services/SettlementEngine");
 
 // ✅ Mark Order as Picked Up (with OTP verification)
 module.exports.markOrderPickedUp = async (req, res) => {
@@ -291,61 +292,10 @@ module.exports.completeDelivery = async (req, res) => {
       await deliveryBoy.save();
     }
 
-    // Update wallet for COD orders
-    if (order.paymentMethod === 'cod') {
-      let wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId });
-      if (!wallet) {
-        wallet = await DeliveryBoyWallet.create({
-          deliveryBoyId: deliveryBoyId,
-          balance: 0,
-          codLimit: 10000
-        });
-      }
-
-      const balanceBefore = wallet.balance;
-      wallet.balance -= order.totalAmount; // Negative balance (debt)
-      wallet.codCollected += order.totalAmount;
-      wallet.codPending += order.totalAmount;
-      const balanceAfter = wallet.balance;
-      await wallet.save();
-
-      // Record transaction
-      await WalletTransaction.create({
-        deliveryBoyId: deliveryBoyId,
-        orderId: orderId,
-        transactionType: 'debit',
-        amount: order.totalAmount,
-        balanceBefore: balanceBefore,
-        balanceAfter: balanceAfter,
-        description: `COD collected for order ${order.orderNumber}`,
-        paymentMethod: 'cod',
-        status: 'completed'
-      });
-
-      // Check if wallet exceeds limit
-      if (!wallet.isWithinLimit()) {
-        wallet.isBlocked = true;
-        wallet.blockReason = 'COD limit exceeded. Please settle your dues.';
-        await wallet.save();
-
-        // Block delivery boy
-        if (deliveryBoy) {
-          deliveryBoy.isBlocked = true;
-          deliveryBoy.blockReason = 'COD limit exceeded';
-          deliveryBoy.isOnline = false;
-          deliveryBoy.isAvailable = false;
-          await deliveryBoy.save();
-        }
-
-        // Create notification
-        await DeliveryBoyNotification.create({
-          deliveryBoyId: deliveryBoyId,
-          title: "Account Blocked",
-          message: `Your account has been blocked due to COD limit exceeded. Current balance: ₹${wallet.balance}. Please settle your dues immediately.`,
-          type: 'account_blocked',
-          priority: 'urgent'
-        });
-      }
+    // Call Centralized Settlement Engine
+    const settlementResult = await SettlementEngine.processDeliveredOrder(order._id);
+    if (!settlementResult.success) {
+      console.warn("Settlement Engine Warning:", settlementResult.error || settlementResult.message);
     }
 
     // Create notification

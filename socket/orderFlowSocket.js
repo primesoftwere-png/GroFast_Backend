@@ -180,6 +180,62 @@ function initializeOrderFlowSocket(io) {
       if (typeof ack === 'function') ack({ success: true, room: requestedRoom });
     });
 
+    // ==================== TRACKING EVENTS ====================
+    
+    /**
+     * Customer joins a specific order tracking room
+     */
+    socket.on('join-tracking', async (orderToken, ack) => {
+      try {
+        console.log(`\n🔍 JOIN TRACKING ROOM: ${orderToken}`);
+        if (!orderToken) {
+          if (typeof ack === 'function') ack({ success: false, message: 'Order token required' });
+          return;
+        }
+
+        const roomName = `tracking_${orderToken}`;
+        socket.join(roomName);
+        console.log(`✅ User ${socket.userId} joined tracking room: ${roomName}`);
+        
+        // Fetch current order status and delivery boy location
+        const order = await Order.findOne({ orderToken })
+          .populate('deliveryBoyId'); // references User profile usually
+
+        if (order) {
+          // Emit initial status
+          socket.emit('tracking-status', {
+            orderId: order._id,
+            orderToken: order.orderToken,
+            orderNumber: order.orderNumber,
+            status: order.orderStatus
+          });
+
+          // Fetch location if assigned
+          if (order.deliveryBoyId) {
+            const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
+            const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+            if (loc) {
+              socket.emit('live-location', {
+                orderId: order._id,
+                orderToken: order.orderToken,
+                orderNumber: order.orderNumber,
+                lat: loc.latitude,
+                lng: loc.longitude,
+                heading: loc.heading,
+                speed: loc.speed,
+                timestamp: loc.updatedAt
+              });
+            }
+          }
+        }
+
+        if (typeof ack === 'function') ack({ success: true, room: roomName });
+      } catch (error) {
+        console.error('Error joining tracking room:', error);
+        if (typeof ack === 'function') ack({ success: false, message: 'Server error' });
+      }
+    });
+
     // ==================== SHOPKEEPER EVENTS ====================
     
     /**
@@ -293,6 +349,17 @@ function initializeOrderFlowSocket(io) {
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'SHOP_ACCEPTED',
+          message: 'Your order has been confirmed by the shop',
+          timestamp: new Date()
+        });
+
+        // Notify tracking room
+        io.to(`tracking_${order.orderToken}`).emit('order-status', {
+          orderId: order._id,
+          orderToken: order.orderToken,
+          orderNumber: order.orderNumber,
           status: 'SHOP_ACCEPTED',
           message: 'Your order has been confirmed by the shop',
           timestamp: new Date()
@@ -343,7 +410,8 @@ function initializeOrderFlowSocket(io) {
         }
 
         // Check if order is in correct status
-        if (order.orderStatus !== 'SHOP_ACCEPTED') {
+        const validStatuses = ['CONFIRMED', 'ACCEPTED', 'READY_FOR_PICKUP', 'SHOP_ACCEPTED'];
+        if (!validStatuses.includes(order.orderStatus)) {
           socket.emit('error', { message: `Order cannot be accepted. Current status: ${order.orderStatus}` });
           return;
         }
@@ -368,7 +436,7 @@ function initializeOrderFlowSocket(io) {
           { 
             _id: orderId,
             deliveryBoyId: null,
-            orderStatus: 'SHOP_ACCEPTED'
+            orderStatus: { $in: ['CONFIRMED', 'ACCEPTED', 'READY_FOR_PICKUP', 'SHOP_ACCEPTED'] }
           },
           {
             deliveryBoyId: dbId,
@@ -394,6 +462,22 @@ function initializeOrderFlowSocket(io) {
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'ASSIGNED_TO_DELIVERY',
+          message: 'Delivery partner assigned',
+          deliveryBoy: {
+            name: deliveryBoy.userId.fullname,
+            phone: deliveryBoy.userId.phone,
+            vehicleType: deliveryBoy.vehicleType
+          },
+          timestamp: new Date()
+        });
+
+        // Notify tracking room
+        io.to(`tracking_${order.orderToken}`).emit('order-status', {
+          orderId: order._id,
+          orderToken: order.orderToken,
+          orderNumber: order.orderNumber,
           status: 'ASSIGNED_TO_DELIVERY',
           message: 'Delivery partner assigned',
           deliveryBoy: {
@@ -560,6 +644,20 @@ function initializeOrderFlowSocket(io) {
           // Emit live location to customer
           io.to(order.customerId.toString()).emit('live-location', {
             orderId: orderId,
+            orderNumber: order.orderNumber,
+            lat: latitude,
+            lng: longitude,
+            speed: speed,
+            heading: heading,
+            accuracy: accuracy,
+            timestamp: new Date()
+          });
+
+          // Emit to tracking room
+          io.to(`tracking_${order.orderToken}`).emit('live-location', {
+            orderId: orderId,
+            orderToken: order.orderToken,
+            orderNumber: order.orderNumber,
             lat: latitude,
             lng: longitude,
             speed: speed,
@@ -629,6 +727,52 @@ function initializeOrderFlowSocket(io) {
 
   // Store io instance globally for use in API routes
   global.io = io;
+
+  // ==================== BACKGROUND POLLING FOR TRACKING ROOMS ====================
+  // Every 10 seconds, broadcast latest location and status to all active tracking rooms
+  setInterval(async () => {
+    try {
+      if (!io || !io.sockets || !io.sockets.adapter || !io.sockets.adapter.rooms) return;
+      
+      const rooms = io.sockets.adapter.rooms;
+      for (const [roomName, clients] of rooms.entries()) {
+        if (roomName.startsWith('tracking_') && clients.size > 0) {
+          const orderToken = roomName.replace('tracking_', '');
+          
+          const order = await Order.findOne({ orderToken }).populate('deliveryBoyId');
+          if (order) {
+            // Emit latest status to this active room
+            io.to(roomName).emit('tracking-status', {
+              orderId: order._id,
+              orderToken: order.orderToken,
+              orderNumber: order.orderNumber,
+              status: order.orderStatus
+            });
+
+            // Fetch and emit latest location if delivery boy is assigned
+            if (order.deliveryBoyId) {
+              const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
+              const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+              if (loc) {
+                io.to(roomName).emit('live-location', {
+                  orderId: order._id,
+                  orderToken: order.orderToken,
+                  orderNumber: order.orderNumber,
+                  lat: loc.latitude,
+                  lng: loc.longitude,
+                  heading: loc.heading,
+                  speed: loc.speed,
+                  timestamp: loc.updatedAt
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in 10-second tracking interval:', error.message);
+    }
+  }, 10000);
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -691,6 +835,9 @@ async function markDeliveryBoyOffline(userId) {
 function emitOrderAcceptedToCustomer(io, customerId, data) {
   if (io && customerId) {
     io.to(customerId.toString()).emit('order-status', data);
+    if (data && data.orderToken) {
+      io.to(`tracking_${data.orderToken}`).emit('order-status', data);
+    }
   }
 }
 
@@ -712,6 +859,12 @@ function emitOrderReady(io, customerId, deliveryBoyId, data) {
   if (io) {
     if (customerId) io.to(customerId.toString()).emit('order-status', data);
     if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-ready', data);
+    if (data && data.orderToken) {
+      const trackingData = { ...data };
+      if (trackingData.orderStatus) trackingData.orderStatus = 'CONFIRMED';
+      if (trackingData.status) trackingData.status = 'CONFIRMED';
+      io.to(`tracking_${data.orderToken}`).emit('order-status', trackingData);
+    }
   }
 }
 
@@ -722,6 +875,9 @@ function emitOrderCancelled(io, customerId, deliveryBoyId, data) {
   if (io) {
     if (customerId) io.to(customerId.toString()).emit('order-status', data);
     if (deliveryBoyId) io.to(deliveryBoyId.toString()).emit('order-cancelled', data);
+    if (data && data.orderToken) {
+      io.to(`tracking_${data.orderToken}`).emit('order-status', data);
+    }
   }
 }
 
@@ -732,6 +888,13 @@ function emitDeliveryBoyAssigned(io, customerId, shopId, data) {
   if (io) {
     if (customerId) io.to(customerId.toString()).emit('delivery-assigned', data);
     if (shopId) io.to(shopId.toString()).emit('delivery-assigned', data);
+    if (data && data.orderToken) {
+      const trackingData = { ...data };
+      if (trackingData.orderStatus) trackingData.orderStatus = 'CONFIRMED';
+      if (trackingData.status) trackingData.status = 'CONFIRMED';
+      io.to(`tracking_${data.orderToken}`).emit('delivery-assigned', trackingData);
+      io.to(`tracking_${data.orderToken}`).emit('order-status', trackingData);
+    }
   }
 }
 
@@ -741,6 +904,10 @@ function emitDeliveryBoyAssigned(io, customerId, shopId, data) {
 function emitOrderOutForDelivery(io, customerId, data) {
   if (io && customerId) {
     io.to(customerId.toString()).emit('order-out-for-delivery', data);
+    if (data && data.orderToken) {
+      io.to(`tracking_${data.orderToken}`).emit('order-out-for-delivery', data);
+      io.to(`tracking_${data.orderToken}`).emit('order-status', data);
+    }
   }
 }
 
@@ -751,6 +918,10 @@ function emitOrderDelivered(io, customerId, shopId, data) {
   if (io) {
     if (customerId) io.to(customerId.toString()).emit('order-delivered', data);
     if (shopId) io.to(shopId.toString()).emit('order-delivered', data);
+    if (data && data.orderToken) {
+      io.to(`tracking_${data.orderToken}`).emit('order-delivered', data);
+      io.to(`tracking_${data.orderToken}`).emit('order-status', data);
+    }
   }
 }
 

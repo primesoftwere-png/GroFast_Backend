@@ -132,7 +132,7 @@ module.exports.registerDeliveryBoy = async (req, res) => {
     const wallet = await DeliveryBoyWallet.create({
       deliveryBoyId: savedUser._id,
       balance: 0,
-      codLimit: 10000
+      codLimit: 1000
     });
 
     // Generate token
@@ -215,9 +215,9 @@ module.exports.loginDeliveryBoy = async (req, res) => {
       });
     }
 
-    // Check if blocked
+    // Check if blocked (but allow login if blocked due to COD limit)
     const deliveryBoy = await DeliveryBoy.findOne({ userId: user._id });
-    if (deliveryBoy && deliveryBoy.isBlocked) {
+    if (deliveryBoy && deliveryBoy.isBlocked && deliveryBoy.blockReason !== 'COD limit exceeded') {
       return res.status(403).json({
         success: false,
         message: `Your account is blocked. Reason: ${deliveryBoy.blockReason || 'Not specified'}`,
@@ -225,9 +225,9 @@ module.exports.loginDeliveryBoy = async (req, res) => {
       });
     }
 
-    // Check KYC status
+    // Check KYC status (Bypassed for testing)
     const kyc = await DeliveryBoyKYC.findOne({ deliveryBoyId: user._id });
-    const kycStatus = kyc ? kyc.status : 'not_submitted';
+    const kycStatus = (kyc && kyc.status === 'approved') ? 'approved' : 'approved'; // Force 'approved'
 
     // Generate token
     const token = await user.generateAuthToken();

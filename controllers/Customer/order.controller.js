@@ -9,6 +9,8 @@ const CustomerAddress = require('../../models/Customer/CustomerAddress');
 const Notification = require('../../models/Customer/Notification');
 const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 const Shop = require('../../models/ShopKeeper/Shop');
+const { processOrderIncomeInternal } = require('../shopkeeper/income.controller');
+const SettlementEngine = require('../../services/SettlementEngine');
 
 async function resolveShopkeeperTarget(shopId) {
   let shopUser = await User.findById(shopId);
@@ -128,6 +130,11 @@ module.exports.createOrder = async (req, res) => {
         itemsByShop[productShopId].taxAmount += (itemTotal * 18) / 100; // Standard 18% GST used in cart
       }
 
+      // Check if it's the customer's first order
+      const previousOrderCount = await Order.countDocuments({ customerId: userId });
+      const isFirstOrder = previousOrderCount === 0;
+      const appliedDeliveryCharge = isFirstOrder ? 0 : (deliveryCharge || 0);
+
       // Build order payloads for each shop
       for (const [sId, shopData] of Object.entries(itemsByShop)) {
         ordersToCreate.push({
@@ -135,9 +142,9 @@ module.exports.createOrder = async (req, res) => {
           items: shopData.items,
           subtotal: shopData.subtotal,
           taxAmount: shopData.taxAmount,
-          deliveryCharge: deliveryCharge || 0, 
+          deliveryCharge: appliedDeliveryCharge, 
           discountAmount: 0, 
-          totalAmount: shopData.subtotal + (deliveryCharge || 0) + shopData.taxAmount
+          totalAmount: shopData.subtotal + appliedDeliveryCharge + shopData.taxAmount
         });
       }
     } else {
@@ -148,14 +155,22 @@ module.exports.createOrder = async (req, res) => {
           message: 'Unable to create order. Shop information missing.'
         });
       }
+
+      // Check if it's the customer's first order
+      const previousOrderCount = await Order.countDocuments({ customerId: userId });
+      const isFirstOrder = previousOrderCount === 0;
+      const appliedDeliveryCharge = isFirstOrder ? 0 : (deliveryCharge || 0);
+
+      const calculatedSubtotal = subtotal || items.reduce((sum, item) => sum + item.totalPrice, 0);
+
       ordersToCreate.push({
         shopId: shopId,
         items: items,
-        subtotal: subtotal || items.reduce((sum, item) => sum + item.totalPrice, 0),
+        subtotal: calculatedSubtotal,
         taxAmount: taxAmount || 0,
-        deliveryCharge: deliveryCharge || 0,
+        deliveryCharge: appliedDeliveryCharge,
         discountAmount: discountAmount || 0,
-        totalAmount: totalAmount || (subtotal || items.reduce((sum, item) => sum + item.totalPrice, 0)) + (deliveryCharge || 0) + (taxAmount || 0) - (discountAmount || 0)
+        totalAmount: calculatedSubtotal + appliedDeliveryCharge + (taxAmount || 0) - (discountAmount || 0)
       });
     }
 
@@ -691,6 +706,12 @@ module.exports.markDelivered = async (req, res) => {
     order.paymentStatus = 'PAID';
     await order.save();
 
+    // Call Centralized Settlement Engine
+    const settlementResult = await SettlementEngine.processDeliveredOrder(order._id);
+    if (!settlementResult.success) {
+      console.warn("Settlement Engine Warning:", settlementResult.error || settlementResult.message);
+    }
+
     console.log(`\n✓ ORDER DELIVERED: ${order.orderNumber}`);
 
     // Update delivery boy
@@ -1059,6 +1080,28 @@ module.exports.getOrderByToken = async (req, res) => {
       }
     }
 
+    // Fetch complete delivery boy details and append to deliveryBoyId object
+    if (order.deliveryBoyId && order.deliveryBoyId._id) {
+      const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
+      const DeliveryBoyKYC = require('../../models/DeliveryBoy/DeliveryBoyKYC');
+      
+      const db = await DeliveryBoy.findOne({ userId: order.deliveryBoyId._id });
+      if (db) {
+        order.deliveryBoyId = {
+          ...order.deliveryBoyId,
+          vehicleType: db.vehicleType,
+          vehicleNumber: db.vehicleNumber,
+          profileImage: db.profileImage
+        };
+        // Use KYC profile photo if available as fallback/override
+        const kyc = await DeliveryBoyKYC.findOne({ deliveryBoyId: order.deliveryBoyId._id });
+        if (kyc && kyc.profilePhoto) {
+          order.deliveryBoyId.profileImage = kyc.profilePhoto;
+        }
+      }
+    }
+
+    // Removed legacy mapping: The UI now natively handles statuses like ASSIGNED, PICKED_UP, etc.
     res.json({
       success: true,
       data: order

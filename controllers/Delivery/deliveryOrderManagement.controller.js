@@ -6,6 +6,7 @@ const OrderItem = require('../../models/Customer/OrderItem');
 const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
 const DeliveryBoyWallet = require('../../models/DeliveryBoy/DeliveryBoyWallet');
 const WalletTransaction = require('../../models/DeliveryBoy/WalletTransaction');
+const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 const Shop = require('../../models/ShopKeeper/Shop');
 const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
 const { 
@@ -14,6 +15,7 @@ const {
   emitOrderDelivered,
   cancelDeliveryRequests
 } = require('../../socket/orderFlowSocket');
+const SettlementEngine = require('../../services/SettlementEngine');
 
 // ✅ Accept Delivery Request
 module.exports.acceptDeliveryRequest = async (req, res) => {
@@ -418,87 +420,27 @@ module.exports.completeDelivery = async (req, res) => {
     deliveryBoy.isAvailable = true;
     await deliveryBoy.save();
 
-    // Update delivery boy wallet (add earnings and handle COD)
-    const deliveryEarnings = 50; // Calculate based on distance and order value
-    let wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId: deliveryBoy._id });
-    
-    if (!wallet) {
-      wallet = await DeliveryBoyWallet.create({
-        deliveryBoyId: deliveryBoy._id,
-        balance: 0,
-        codLimit: 10000
-      });
+    // Call Centralized Settlement Engine
+    const settlementResult = await SettlementEngine.processDeliveredOrder(order._id);
+    if (!settlementResult.success) {
+      console.warn("Settlement Engine Warning:", settlementResult.error || settlementResult.message);
     }
 
-    // 1. Process Delivery Earnings
-    const balanceBeforeEarnings = wallet.balance;
-    wallet.balance += deliveryEarnings;
-    wallet.totalEarnings += deliveryEarnings;
-    const balanceAfterEarnings = wallet.balance;
-    await wallet.save();
-
-    // Create earnings transaction
-    await WalletTransaction.create({
-      deliveryBoyId: deliveryBoy._id,
-      orderId: order._id,
-      transactionType: 'credit',
-      amount: deliveryEarnings,
-      balanceBefore: balanceBeforeEarnings,
-      balanceAfter: balanceAfterEarnings,
-      description: `Delivery earnings for order ${order.orderNumber}`,
-      paymentMethod: null,
-      status: 'completed'
-    });
-
-    // 2. Process COD if applicable
-    if (order.paymentMethod === 'cod' || order.paymentMethod === 'COD') {
-      const balanceBeforeCOD = wallet.balance;
-      wallet.balance -= order.totalAmount; // Negative balance (debt to admin)
-      wallet.codCollected += order.totalAmount;
-      wallet.codPending += order.totalAmount;
-      const balanceAfterCOD = wallet.balance;
-      await wallet.save();
-
-      // Create COD debit transaction
-      await WalletTransaction.create({
+    // Check if delivery boy got blocked due to COD limits
+    const updatedWallet = await DeliveryBoyWallet.findOne({ deliveryBoyId: userId });
+    if (updatedWallet && updatedWallet.isBlocked) {
+      // Notify delivery boy about block
+      const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
+      await DeliveryBoyNotification.create({
         deliveryBoyId: deliveryBoy._id,
-        orderId: order._id,
-        transactionType: 'debit',
-        amount: order.totalAmount,
-        balanceBefore: balanceBeforeCOD,
-        balanceAfter: balanceAfterCOD,
-        description: `COD collected for order ${order.orderNumber}`,
-        paymentMethod: 'cod',
-        status: 'completed'
+        title: "Account Blocked",
+        message: `Your account has been blocked due to COD limit exceeded. Current balance: ₹${updatedWallet.balance}. Please settle your dues immediately.`,
+        type: 'account_blocked',
+        priority: 'urgent'
       });
-
-      // Check if wallet exceeds limit
-      if (!wallet.isWithinLimit()) {
-        wallet.isBlocked = true;
-        wallet.blockReason = 'COD limit exceeded. Please settle your dues.';
-        await wallet.save();
-
-        // Block delivery boy from receiving new orders
-        deliveryBoy.isBlocked = true;
-        deliveryBoy.blockReason = 'COD limit exceeded';
-        deliveryBoy.isOnline = false;
-        deliveryBoy.isAvailable = false;
-        await deliveryBoy.save();
-
-        // Create notification
-        const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
-        await DeliveryBoyNotification.create({
-          deliveryBoyId: deliveryBoy._id,
-          title: "Account Blocked",
-          message: `Your account has been blocked due to COD limit exceeded. Current balance: ₹${wallet.balance}. Please settle your dues immediately.`,
-          type: 'account_blocked',
-          priority: 'urgent'
-        });
-      }
     }
 
     console.log('✓ Delivery completed successfully');
-    console.log('Earnings added:', deliveryEarnings);
     if (order.paymentMethod === 'cod' || order.paymentMethod === 'COD') {
       console.log('COD Collected:', order.totalAmount);
     }
@@ -535,8 +477,8 @@ module.exports.completeDelivery = async (req, res) => {
         orderToken: order.orderToken,
         orderStatus: order.orderStatus,
         deliveredAt: order.deliveredAt,
-        earnings: deliveryEarnings,
-        walletBalance: wallet.balance
+        earnings: order.deliveryCharge || 0,
+        walletBalance: updatedWallet ? updatedWallet.balance : 0
       }
     });
 
@@ -660,15 +602,35 @@ module.exports.getOrderDetails = async (req, res) => {
       });
     }
 
+    // Fetch Shop details to get latitude and longitude
+    let shopDetails = null;
+    if (order.shopId && order.shopId._id) {
+      const shopkeeper = await Shopkeeper.findOne({ userId: order.shopId._id });
+      if (shopkeeper) {
+        shopDetails = await Shop.findOne({ shopkeeperId: shopkeeper._id });
+      }
+    }
+
     // Get order items
     const items = await OrderItem.find({ orderId: order._id })
       .populate('productId', 'productName productImage productPrice productDescription');
+      
+    // Convert order to object to append shop details
+    const orderObj = order.toObject();
+    if (shopDetails) {
+      orderObj.shopDetails = {
+        latitude: shopDetails.latitude,
+        longitude: shopDetails.longitude,
+        shopAddress: shopDetails.shopAddress,
+        shopName: shopDetails.shopName
+      };
+    }
 
     return res.status(200).json({
       success: true,
       message: 'Order details retrieved successfully',
       data: {
-        order: order,
+        order: orderObj,
         items: items
       }
     });

@@ -65,11 +65,15 @@ router.post('/orders/otp/delivery', protectDeliveryRoutes, deliveryController.ge
 router.post('/location/update', protectDeliveryRoutes, deliveryController.updateLocation);
 router.get('/location/current', protectDeliveryRoutes, deliveryController.getCurrentLocation);
 
+// ==================== INCOME ROUTES ====================
+router.get('/income', protectDeliveryRoutes, deliveryController.getIncome);
+
 // ==================== WALLET ROUTES ====================
 router.get('/wallet/dashboard', protectDeliveryRoutes, deliveryController.getIncomeDashboard);
 router.get('/wallet/balance', protectDeliveryRoutes, deliveryController.getWalletBalance);
 router.get('/wallet/transactions', protectDeliveryRoutes, deliveryController.getWalletTransactions);
 router.get('/wallet/cod-summary', protectDeliveryRoutes, deliveryController.getCODSummary);
+router.post('/wallet/add-balance', protectDeliveryRoutes, deliveryController.addBalance);
 
 // ==================== SETTLEMENT ROUTES ====================
 router.post('/settlement/request', protectDeliveryRoutes, deliveryController.requestSettlement);

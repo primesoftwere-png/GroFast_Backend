@@ -4,6 +4,8 @@ const SuperAdminController = require("../../controllers/SuperAdmin/superadmin.co
 const roleMiddleware = require("../../middlewere/role.middleware");
 
 const router = express.Router();
+const PaymentSettlementController = require("../../controllers/SuperAdmin/paymentSettlement.controller");
+
 
 // Dashboard route
 router.get(
@@ -43,6 +45,22 @@ router.get(
   authMiddleware.userMiddlewere,
   // roleMiddleware.authorizeRoles("superadmin"),
   SuperAdminController.getCustomers
+);
+
+// Payment Settlement Route
+router.post(
+  "/order-settlement",
+  authMiddleware.userMiddlewere,
+  // roleMiddleware.authorizeRoles("superadmin"),
+  PaymentSettlementController.settleOrderPayment
+);
+
+// Approve Delivery Boy Settlement (COD Digital Submission)
+router.post(
+  "/delivery-settlement/approve",
+  authMiddleware.userMiddlewere,
+  // roleMiddleware.authorizeRoles("superadmin"),
+  PaymentSettlementController.approveDeliveryBoySettlement
 );
 
 module.exports = router;

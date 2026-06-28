@@ -18,5 +18,6 @@ router.post('/settings/change-password', settingsController.changePassword);
 // Wallet & Payout
 router.get('/wallet', settingsController.getWalletDetails);
 router.post('/wallet/payout', settingsController.requestPayout);
+router.post('/wallet/add-balance', settingsController.addWalletBalance);
 
 module.exports = router;

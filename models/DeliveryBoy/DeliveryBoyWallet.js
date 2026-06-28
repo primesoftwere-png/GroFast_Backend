@@ -27,7 +27,7 @@ const DeliveryBoyWalletSchema = new mongoose.Schema({
   },
   codLimit: {
     type: Number,
-    default: 10000, // Maximum COD amount delivery boy can hold
+    default: 1000, // Maximum COD amount delivery boy can hold
     required: true
   },
   isBlocked: {
@@ -64,12 +64,13 @@ DeliveryBoyWalletSchema.pre('save', function(next) {
 // Method to check if delivery boy can accept COD orders
 DeliveryBoyWalletSchema.methods.canAcceptCOD = function(orderAmount) {
   const potentialBalance = this.balance - orderAmount;
-  return Math.abs(potentialBalance) <= this.codLimit;
+  // A positive balance means surplus, negative means debt. So only block if debt exceeds limit.
+  return potentialBalance >= -this.codLimit;
 };
 
 // Method to check if wallet is within limit
 DeliveryBoyWalletSchema.methods.isWithinLimit = function() {
-  return Math.abs(this.balance) <= this.codLimit;
+  return this.balance >= -this.codLimit;
 };
 
 module.exports = mongoose.model('DeliveryBoyWallet', DeliveryBoyWalletSchema);

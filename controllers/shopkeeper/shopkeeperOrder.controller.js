@@ -65,9 +65,15 @@ module.exports.getOrders = async (req, res) => {
     };
     
     if (status) {
-      const validStatuses = ['PENDING', 'CONFIRMED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
-      if (validStatuses.includes(status.toUpperCase())) {
-        query.orderStatus = status.toUpperCase();
+      if (status.toUpperCase() === 'ACTIVE') {
+        query.orderStatus = { $nin: ['DELIVERED', 'CANCELLED', 'EXPIRED'] };
+      } else if (status.toUpperCase() === 'ACCEPTED') {
+        query.orderStatus = { $in: ['ACCEPTED', 'CONFIRMED'] };
+      } else {
+        const validStatuses = ['PENDING', 'CONFIRMED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', 'EXPIRED', 'READY_FOR_PICKUP'];
+        if (validStatuses.includes(status.toUpperCase())) {
+          query.orderStatus = status.toUpperCase();
+        }
       }
     }
 

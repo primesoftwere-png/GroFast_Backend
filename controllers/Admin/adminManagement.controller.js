@@ -687,24 +687,63 @@ module.exports.rejectDeliveryBoy = async (req, res) => {
 module.exports.getShopkeeperKYC = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const query = {};
-    if (status) {
-      query.status = status;
+    // If status is specific to KYC (e.g. approved/rejected), we query ShopkeeperKYC
+    // But we also want to see 'pending' users who haven't submitted KYC yet.
+    
+    // We'll return users who are 'pending' in User table, PLUS users who have a PENDING KYC.
+    let kycs = [];
+    let total = 0;
+
+    if (!status || status.toLowerCase() === 'pending') {
+      const pendingUsers = await User.find({
+        role: 'admin',
+        $or: [
+          { 'roleDetails.shopkeeper.status': 'pending' },
+          { 'roleDetails.shopkeeper.status': { $exists: false } }
+        ]
+      }).skip(skip).limit(parseInt(limit)).lean();
+      
+      total = await User.countDocuments({
+        role: 'admin',
+        $or: [
+          { 'roleDetails.shopkeeper.status': 'pending' },
+          { 'roleDetails.shopkeeper.status': { $exists: false } }
+        ]
+      });
+
+      kycs = await Promise.all(
+        pendingUsers.map(async (user) => {
+          const shopkeeperProfile = await Shopkeeper.findOne({ userId: user._id });
+          let kycData = null;
+          if (shopkeeperProfile) {
+             kycData = await ShopkeeperKYC.findOne({ shopkeeperId: shopkeeperProfile._id });
+          }
+          return {
+            _id: kycData ? kycData._id : null,
+            status: kycData ? kycData.kycStatus.toLowerCase() : 'not_submitted',
+            shopkeeperId: user,
+            kycData: kycData
+          };
+        })
+      );
+    } else {
+      const query = { status: status };
+      const kycRequests = await ShopkeeperKYC.find(query)
+        .populate('shopkeeperId', 'fullname email phone roleDetails')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip(skip)
+        .lean();
+
+      total = await ShopkeeperKYC.countDocuments(query);
+      kycs = kycRequests;
     }
-
-    const kycRequests = await ShopkeeperKYC.find(query)
-      .populate('shopkeeperId', 'fullname email phone roleDetails')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .lean();
-
-    const total = await ShopkeeperKYC.countDocuments(query);
 
     res.json({
       success: true,
-      data: kycRequests,
+      data: kycs,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -819,24 +858,55 @@ module.exports.rejectShopkeeperKYC = async (req, res) => {
 module.exports.getDeliveryBoyKYC = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const query = {};
-    if (status) {
-      query.status = status;
+    let kycs = [];
+    let total = 0;
+
+    if (!status || status.toLowerCase() === 'pending') {
+      const pendingUsers = await User.find({
+        role: 'deliveryBoy',
+        $or: [
+          { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'inactive' },
+          { 'roleDetails.deliveryBoy.deliveryBoyStatus': { $exists: false } }
+        ]
+      }).skip(skip).limit(parseInt(limit)).lean();
+      
+      total = await User.countDocuments({
+        role: 'deliveryBoy',
+        $or: [
+          { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'inactive' },
+          { 'roleDetails.deliveryBoy.deliveryBoyStatus': { $exists: false } }
+        ]
+      });
+
+      kycs = await Promise.all(
+        pendingUsers.map(async (user) => {
+          const kycData = await DeliveryBoyKYC.findOne({ deliveryBoyId: user._id });
+          return {
+            _id: kycData ? kycData._id : null,
+            status: kycData ? kycData.status : 'not_submitted',
+            deliveryBoyId: user,
+            kycData: kycData
+          };
+        })
+      );
+    } else {
+      const query = { status: status };
+      const kycRequests = await DeliveryBoyKYC.find(query)
+        .populate('deliveryBoyId', 'fullname email phone roleDetails')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip(skip)
+        .lean();
+
+      total = await DeliveryBoyKYC.countDocuments(query);
+      kycs = kycRequests;
     }
-
-    const kycRequests = await DeliveryBoyKYC.find(query)
-      .populate('deliveryBoyId', 'fullname email phone roleDetails')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .lean();
-
-    const total = await DeliveryBoyKYC.countDocuments(query);
 
     res.json({
       success: true,
-      data: kycRequests,
+      data: kycs,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

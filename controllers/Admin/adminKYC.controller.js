@@ -13,17 +13,45 @@ module.exports.getPendingDeliveryBoyKYCs = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
 
-    const kycs = await DeliveryBoyKYC.find({ status: 'pending' })
-      .populate('deliveryBoyId', 'fullname email phone')
-      .sort({ submittedAt: -1 })
+    // Find users with deliveryBoy role who are not yet active
+    const pendingUsers = await User.find({
+      role: 'deliveryBoy',
+      $or: [
+        { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'inactive' },
+        { 'roleDetails.deliveryBoy.deliveryBoyStatus': { $exists: false } }
+      ]
+    })
+      .select('-password')
+      .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
 
-    const total = await DeliveryBoyKYC.countDocuments({ status: 'pending' });
+    const total = await User.countDocuments({
+      role: 'deliveryBoy',
+      $or: [
+        { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'inactive' },
+        { 'roleDetails.deliveryBoy.deliveryBoyStatus': { $exists: false } }
+      ]
+    });
+
+    const kycs = await Promise.all(
+      pendingUsers.map(async (user) => {
+        const deliveryBoyProfile = await DeliveryBoy.findOne({ userId: user._id });
+        let kycData = await DeliveryBoyKYC.findOne({ deliveryBoyId: user._id });
+        
+        return {
+          ...user,
+          deliveryBoyProfile: deliveryBoyProfile || null,
+          kycDetails: kycData || null,
+          kycStatus: kycData ? kycData.status.toUpperCase() : 'NOT_SUBMITTED'
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Pending delivery boy KYCs retrieved successfully",
+      message: "Pending delivery boys retrieved successfully",
       data: {
         kycs,
         pagination: {
@@ -156,10 +184,10 @@ module.exports.approveDeliveryBoyKYC = async (req, res) => {
     kyc.verifiedAt = Date.now();
     await kyc.save();
 
-    // Update delivery boy isKYCVerified status
-    await DeliveryBoy.findOneAndUpdate(
-      { userId: kyc.deliveryBoyId },
-      { isKYCVerified: true }
+    // Update User model to make delivery boy active
+    await User.findByIdAndUpdate(
+      kyc.deliveryBoyId,
+      { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'active' }
     );
 
     return res.status(200).json({
@@ -212,10 +240,10 @@ module.exports.rejectDeliveryBoyKYC = async (req, res) => {
     kyc.verifiedAt = Date.now();
     await kyc.save();
 
-    // Update delivery boy isKYCVerified status
-    await DeliveryBoy.findOneAndUpdate(
-      { userId: kyc.deliveryBoyId },
-      { isKYCVerified: false }
+    // Update User model to make delivery boy inactive/blocked
+    await User.findByIdAndUpdate(
+      kyc.deliveryBoyId,
+      { 'roleDetails.deliveryBoy.deliveryBoyStatus': 'inactive' }
     );
 
     return res.status(200).json({
