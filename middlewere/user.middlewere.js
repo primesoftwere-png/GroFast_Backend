@@ -15,7 +15,7 @@ module.exports.userMiddlewere = async (req, res, next) => {
     }
 
     // Verify JWT directly to get specific error types
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "shrey@1011");
     
     if (!decoded) {
       return res.status(401).json({ 

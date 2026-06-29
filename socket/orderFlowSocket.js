@@ -41,7 +41,7 @@ function initializeOrderFlowSocket(io) {
       }
 
       // Verify JWT token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || "shrey@1011");
       console.log('✅ Token decoded successfully');
       console.log('User ID:', decoded._id);
       

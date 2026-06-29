@@ -169,21 +169,26 @@ module.exports.getBestsellerProducts = async (req, res) => {
     const { limit } = req.query;
     const limitNum = parseInt(limit) || 10;
 
-    // Aggregate order items to find most sold products
-    // Only consider delivered orders
-    const deliveredOrders = await Order.find({
-      orderStatus: { $regex: /^delivered$/i },
-    }).select("_id");
-
-    const deliveredOrderIds = deliveredOrders.map((order) => order._id);
-
-    // Aggregate products by total quantity sold
+    // Aggregate products by total quantity sold using $lookup to avoid memory/timeout issues (499)
     const bestsellers = await OrderItem.aggregate([
       {
         $match: {
-          orderId: { $in: deliveredOrderIds },
           productId: { $ne: null }, // Only include items with valid product references
         },
+      },
+      {
+        $lookup: {
+          from: "orders",
+          localField: "orderId",
+          foreignField: "_id",
+          as: "orderData"
+        }
+      },
+      { $unwind: "$orderData" },
+      {
+        $match: {
+          "orderData.orderStatus": { $regex: /^delivered$/i }
+        }
       },
       {
         $group: {
