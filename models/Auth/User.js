@@ -68,7 +68,7 @@ UserSchema.methods.generateAuthToken = async function () {
       _id: user._id.toString(), 
       role: user.userType 
     }, 
-    process.env.JWT_SECRET, 
+    process.env.JWT_SECRET || "shrey@1011", 
     { expiresIn: "1d" }
   );
   return token;
@@ -86,7 +86,7 @@ UserSchema.statics.hashPassword = async function (password) {
 
 UserSchema.statics.verifyAuthToken = async function (token) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "shrey@1011");
     return decoded;
   } catch (error) {
     throw new Error("Invalid token");

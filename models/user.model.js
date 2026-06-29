@@ -110,7 +110,7 @@ userSchema.methods.generateAuthToken = async function () {
       role: user.role,
       effectiveStatus, // Use effective status instead of raw accountStatus
     },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET || "shrey@1011",
     { expiresIn: "7d" }
   );
   return token;
