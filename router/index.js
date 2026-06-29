@@ -14,6 +14,7 @@ const couponRouter = require("../router/Customer/coupon.router.js");
 const shopAdvertisementRouter = require("../router/Customer/shopAdvertisement.router.js");
 const chatRouter = require("./chat.router.js");
 const aiRouter = require("./AI/ai.router.js");
+const reviewRouter = require("../router/Customer/review.router.js");
 
 // Import customer controller for direct product routes
 const customerController = require("../controllers/Customer/customer.controller");
@@ -42,6 +43,7 @@ const configureRoutes = (app) => {
   app.use(`${apiPrefix}/chat`, chatRouter);
   app.use(`${apiPrefix}/ai`, aiRouter);
   app.use(`${apiPrefix}/customer/coupons`, couponRouter);
+  app.use(`${apiPrefix}/review`, reviewRouter);
 
   // Direct product routes (for convenience)
   app.get(`${apiPrefix}/products/bestsellers`, customerController.getBestsellerProducts);
