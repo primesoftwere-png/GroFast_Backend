@@ -1,9 +1,16 @@
 const cron = require('node-cron');
+const mongoose = require('mongoose');
 const Order = require('../models/Customer/Order');
 
 // Run every minute to check for expired orders
 cron.schedule('* * * * *', async () => {
     try {
+        // Skip if mongoose is not connected yet (readyState 1 = connected)
+        if (mongoose.connection.readyState !== 1) {
+            console.log('[CRON] Skipping order expiry job: Database not connected');
+            return;
+        }
+
         const now = new Date();
         const fifteenMinsAgo = new Date(now.getTime() - 15 * 60 * 1000);
         

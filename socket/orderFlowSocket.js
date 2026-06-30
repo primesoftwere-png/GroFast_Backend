@@ -459,6 +459,11 @@ function initializeOrderFlowSocket(io) {
         console.log(`✓ Order ${orderId} status: CONFIRMED → ASSIGNED`);
         console.log(`✓ Assigned to: ${deliveryBoy.userId.fullname}`);
 
+        // Create a room for that order
+        const orderRoom = `order_${orderId.toString()}`;
+        socket.join(orderRoom);
+        console.log(`✓ Delivery Boy joined room: ${orderRoom}`);
+
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
@@ -729,50 +734,80 @@ function initializeOrderFlowSocket(io) {
   global.io = io;
 
   // ==================== BACKGROUND POLLING FOR TRACKING ROOMS ====================
-  // Every 10 seconds, broadcast latest location and status to all active tracking rooms
+  // Every 5 seconds, broadcast latest location and status to active tracking and order rooms
   setInterval(async () => {
     try {
       if (!io || !io.sockets || !io.sockets.adapter || !io.sockets.adapter.rooms) return;
       
       const rooms = io.sockets.adapter.rooms;
-      for (const [roomName, clients] of rooms.entries()) {
-        if (roomName.startsWith('tracking_') && clients.size > 0) {
-          const orderToken = roomName.replace('tracking_', '');
-          
-          const order = await Order.findOne({ orderToken }).populate('deliveryBoyId');
-          if (order) {
-            // Emit latest status to this active room
-            io.to(roomName).emit('tracking-status', {
-              orderId: order._id,
-              orderToken: order.orderToken,
-              orderNumber: order.orderNumber,
-              status: order.orderStatus
-            });
+      const processedOrders = new Set();
 
-            // Fetch and emit latest location if delivery boy is assigned
-            if (order.deliveryBoyId) {
-              const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
-              const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
-              if (loc) {
-                io.to(roomName).emit('live-location', {
-                  orderId: order._id,
-                  orderToken: order.orderToken,
-                  orderNumber: order.orderNumber,
-                  lat: loc.latitude,
-                  lng: loc.longitude,
-                  heading: loc.heading,
-                  speed: loc.speed,
-                  timestamp: loc.updatedAt
-                });
+      for (const [roomName, clients] of rooms.entries()) {
+        let orderToken = null;
+        let orderId = null;
+
+        if (roomName.startsWith('tracking_') && clients.size > 0) {
+          orderToken = roomName.replace('tracking_', '');
+        } else if (roomName.startsWith('order_') && clients.size > 0) {
+          orderId = roomName.replace('order_', '');
+        }
+
+        if (!orderToken && !orderId) continue;
+
+        let order;
+        if (orderToken) {
+          order = await Order.findOne({ orderToken }).populate('deliveryBoyId');
+        } else if (orderId) {
+          order = await Order.findById(orderId).populate('deliveryBoyId');
+        }
+
+        if (order && !processedOrders.has(order._id.toString())) {
+          processedOrders.add(order._id.toString());
+
+          // Emit latest status
+          const statusPayload = {
+            orderId: order._id,
+            orderToken: order.orderToken,
+            orderNumber: order.orderNumber,
+            status: order.orderStatus
+          };
+
+          io.to(`tracking_${order.orderToken}`).emit('tracking-status', statusPayload);
+          io.to(`order_${order._id}`).emit('tracking-status', statusPayload);
+          if (order.customerId) {
+            io.to(order.customerId.toString()).emit('tracking-status', statusPayload);
+          }
+
+          // Fetch and emit latest location if delivery boy is assigned
+          if (order.deliveryBoyId) {
+            const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
+            const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+            if (loc) {
+              const locPayload = {
+                orderId: order._id,
+                orderToken: order.orderToken,
+                orderNumber: order.orderNumber,
+                lat: loc.latitude,
+                lng: loc.longitude,
+                heading: loc.heading,
+                speed: loc.speed,
+                timestamp: loc.updatedAt
+              };
+              
+              io.to(`tracking_${order.orderToken}`).emit('live-location', locPayload);
+              io.to(`order_${order._id}`).emit('live-location', locPayload);
+              // Send perfectly to customer panel to that customer id
+              if (order.customerId) {
+                io.to(order.customerId.toString()).emit('live-location', locPayload);
               }
             }
           }
         }
       }
     } catch (error) {
-      console.error('Error in 10-second tracking interval:', error.message);
+      console.error('Error in 5-second tracking interval:', error.message);
     }
-  }, 10000);
+  }, 5000);
 }
 
 // ==================== HELPER FUNCTIONS ====================
