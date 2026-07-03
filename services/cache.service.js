@@ -16,7 +16,7 @@ class CacheService {
         maxRetriesPerRequest: 1,
         retryStrategy(times) {
           if (times > 3) {
-             console.warn('⚠️ Could not connect to Redis. Falling back to in-memory cache.');
+             console.warn('⚠️ Could not connect to Redis after 3 retries. Falling back to in-memory cache.');
              return null; // Stop retrying
           }
           return Math.min(times * 50, 2000);
@@ -29,12 +29,13 @@ class CacheService {
       });
 
       this.redisClient.on('error', (err) => {
-        // Suppress massive connection error logs if redis is simply not installed
+        console.error('❌ Redis connection error:', err.message);
         this.isRedisConnected = false;
       });
       
     } catch (err) {
-      console.warn('⚠️ Redis initialization failed, using memory cache.');
+      console.error('⚠️ Redis initialization failed with error:', err.message);
+      console.warn('⚠️ Falling back to memory cache.');
       this.isRedisConnected = false;
     }
   }
