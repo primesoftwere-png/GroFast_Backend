@@ -1,4 +1,5 @@
 const Redis = require('ioredis');
+require('dotenv').config(); // Ensure env vars are loaded
 
 class CacheService {
   constructor() {
@@ -11,8 +12,13 @@ class CacheService {
 
   init() {
     try {
-      // Connect to Redis
-      this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      // Connect to Redis (strip any accidental quotes from the env var)
+      let redisUrl = process.env.REDIS_URL;
+      if (redisUrl && redisUrl.startsWith('"') && redisUrl.endsWith('"')) {
+        redisUrl = redisUrl.slice(1, -1);
+      }
+      
+      this.redisClient = new Redis(redisUrl || 'redis://localhost:6379', {
         maxRetriesPerRequest: 1,
         retryStrategy(times) {
           if (times > 3) {

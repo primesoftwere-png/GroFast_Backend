@@ -11,8 +11,6 @@ const MongoConnection = async () => {
   try {
     const mongoUri = process.env.MONGODB_URI || "mongodb+srv://shreyponkiya:shreyponkiya@cluster0.no2cj.mongodb.net/Grocery_Fast?retryWrites=true&w=majority&appName=Cluster0";
     await mongoose.connect(mongoUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
