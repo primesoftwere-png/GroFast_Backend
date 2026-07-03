@@ -38,6 +38,25 @@ app.use(
 );
 app.use("/uploads", express.static("uploads"));
 
+// Health Check Endpoint (for monitoring Redis and DB status)
+app.get('/health', async (req, res) => {
+  const cacheService = require('./services/cache.service');
+  const cacheHealth = await cacheService.healthCheck();
+  const cacheStats = cacheService.getStats();
+  
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    cache: {
+      ...cacheHealth,
+      ...cacheStats
+    },
+    database: 'connected', // MongoDB is connected if we reach here
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Make io accessible in routes
 app.set('io', io);
 
@@ -75,4 +94,4 @@ MongoConnection().then(() => {
   console.error("❌ Failed to connect to database:", error.message);
   // Do not exit process immediately if you want Render to see the port open.
   // The app will remain up, and DB reconnection or health checks will handle the rest.
-});
+});

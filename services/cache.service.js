@@ -11,6 +11,12 @@ class CacheService {
   }
 
   init() {
+    // Skip Redis if no REDIS_URL is configured
+    if (!process.env.REDIS_URL) {
+      console.log('ℹ️  No REDIS_URL configured. Using in-memory cache only.');
+      return;
+    }
+
     try {
       // Connect to Redis (strip any accidental quotes from the env var)
       let redisUrl = process.env.REDIS_URL;
@@ -18,14 +24,28 @@ class CacheService {
         redisUrl = redisUrl.slice(1, -1);
       }
       
-      this.redisClient = new Redis(redisUrl || 'redis://localhost:6379', {
-        maxRetriesPerRequest: 1,
+      console.log('🔄 Attempting to connect to Redis...');
+      
+      this.redisClient = new Redis(redisUrl, {
+        maxRetriesPerRequest: 3,
+        enableReadyCheck: true,
+        connectTimeout: 10000, // 10 seconds timeout
+        lazyConnect: false, // Connect immediately
         retryStrategy(times) {
           if (times > 3) {
-             console.warn('⚠️ Could not connect to Redis after 3 retries. Falling back to in-memory cache.');
+             console.warn('⚠️  Could not connect to Redis after 3 retries. Falling back to in-memory cache.');
              return null; // Stop retrying
           }
-          return Math.min(times * 50, 2000);
+          const delay = Math.min(times * 1000, 3000);
+          console.log(`🔄 Redis retry attempt ${times} in ${delay}ms...`);
+          return delay;
+        },
+        reconnectOnError(err) {
+          // Reconnect on READONLY errors
+          if (err.message.includes('READONLY')) {
+            return true;
+          }
+          return false;
         }
       });
 
@@ -34,15 +54,39 @@ class CacheService {
         this.isRedisConnected = true;
       });
 
+      this.redisClient.on('ready', () => {
+        console.log('✅ Redis client is ready and operational');
+        this.isRedisConnected = true;
+      });
+
       this.redisClient.on('error', (err) => {
-        console.error('❌ Redis connection error:', err.message);
+        // Only log connection errors once to avoid spam
+        if (this.isRedisConnected || err.message.includes('ECONNREFUSED')) {
+          console.error('❌ Redis error:', err.message);
+        }
+        this.isRedisConnected = false;
+      });
+
+      this.redisClient.on('close', () => {
+        if (this.isRedisConnected) {
+          console.log('⚠️  Redis connection closed');
+        }
+        this.isRedisConnected = false;
+      });
+
+      this.redisClient.on('reconnecting', () => {
+        console.log('🔄 Reconnecting to Redis...');
+      });
+
+      this.redisClient.on('end', () => {
         this.isRedisConnected = false;
       });
       
     } catch (err) {
-      console.error('⚠️ Redis initialization failed with error:', err.message);
-      console.warn('⚠️ Falling back to memory cache.');
+      console.error('❌ Redis initialization failed:', err.message);
+      console.log('⚠️  Using in-memory cache as fallback.');
       this.isRedisConnected = false;
+      this.redisClient = null;
     }
   }
 
@@ -118,6 +162,67 @@ class CacheService {
     }
     this.memoryCache.delete(key);
     return true;
+  }
+
+  /**
+   * Check if Redis is connected
+   */
+  isRedisAvailable() {
+    return this.isRedisConnected && this.redisClient !== null;
+  }
+
+  /**
+   * Get cache stats
+   */
+  getStats() {
+    return {
+      redisConnected: this.isRedisConnected,
+      memoryCacheSize: this.memoryCache.size,
+      cacheType: this.isRedisConnected ? 'Redis' : 'In-Memory'
+    };
+  }
+
+  /**
+   * Health check - test Redis connection
+   */
+  async healthCheck() {
+    if (!this.redisClient || !this.isRedisConnected) {
+      return {
+        status: 'disconnected',
+        type: 'memory',
+        message: 'Using in-memory cache'
+      };
+    }
+
+    try {
+      await this.redisClient.ping();
+      return {
+        status: 'connected',
+        type: 'redis',
+        message: 'Redis is operational'
+      };
+    } catch (err) {
+      return {
+        status: 'error',
+        type: 'memory',
+        message: err.message
+      };
+    }
+  }
+
+  /**
+   * Gracefully close Redis connection
+   */
+  async close() {
+    if (this.redisClient) {
+      try {
+        await this.redisClient.quit();
+        console.log('✅ Redis connection closed gracefully');
+      } catch (err) {
+        console.error('Error closing Redis connection:', err.message);
+      }
+    }
+    this.memoryCache.clear();
   }
 }
 
