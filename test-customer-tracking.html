@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Order Tracking Test</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    
+    .content {
+      padding: 30px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 14px;
+    }
+    
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .status {
+      padding: 20px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    
+    .status-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: white;
+      border-radius: 6px;
+      border-left: 4px solid #ccc;
+    }
+    
+    .status-item.success {
+      border-left-color: #4caf50;
+    }
+    
+    .status-item.error {
+      border-left-color: #f44336;
+    }
+    
+    .status-item.info {
+      border-left-color: #2196f3;
+    }
+    
+    .status-icon {
+      font-size: 20px;
+      margin-right: 12px;
+    }
+    
+    .status-text {
+      flex: 1;
+      font-size: 14px;
+    }
+    
+    .location-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    
+    .location-card h3 {
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+    
+    .location-detail {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .location-detail:last-child {
+      border-bottom: none;
+    }
+    
+    .location-label {
+      opacity: 0.9;
+      font-size: 13px;
+    }
+    
+    .location-value {
+      font-weight: 600;
+      font-size: 13px;
+    }
+    
+    .logs {
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    
+    .log-entry {
+      margin-bottom: 5px;
+      line-height: 1.6;
+    }
+    
+    .log-time {
+      color: #888;
+      margin-right: 8px;
+    }
+    
+    .pulse {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background: #4caf50;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+      }
+    }
+    
+    .map-placeholder {
+      width: 100%;
+      height: 300px;
+      background: #f0f0f0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚚 Live Order Tracking Test</h1>
+      <p>Test Socket.IO connection and receive live delivery location updates</p>
+    </div>
+    
+    <div class="content">
+      <form id="trackingForm">
+        <div class="form-group">
+          <label for="apiUrl">API URL</label>
+          <input type="text" id="apiUrl" value="http://localhost:8000" placeholder="e.g., http://localhost:8000">
+        </div>
+        
+        <div class="form-group">
+          <label for="authToken">Customer Auth Token (JWT)</label>
+          <input type="text" id="authToken" placeholder="Paste your JWT token here">
+        </div>
+        
+        <div class="form-group">
+          <label for="orderId">Order ID</label>
+          <input type="text" id="orderId" placeholder="e.g., 674abc123def456">
+        </div>
+        
+        <div class="form-group">
+          <label for="deliveryBoyId">Delivery Boy ID (User ID)</label>
+          <input type="text" id="deliveryBoyId" placeholder="e.g., 674xyz789abc012">
+        </div>
+        
+        <button type="submit" class="btn" id="connectBtn">
+          🚀 Connect & Start Tracking
+        </button>
+      </form>
+      
+      <div class="status" id="statusContainer" style="display: none;">
+        <h3 style="margin-bottom: 15px; font-size: 16px;">Connection Status</h3>
+        <div id="statusList"></div>
+      </div>
+      
+      <div class="location-card" id="locationCard" style="display: none;">
+        <h3><span class="pulse"></span>Live Location Updates</h3>
+        <div id="locationDetails"></div>
+      </div>
+      
+      <div class="map-placeholder" id="mapPlaceholder" style="display: none;">
+        🗺️ Map Integration Point<br>
+        <small>Integrate Google Maps / Mapbox here to show delivery location</small>
+      </div>
+      
+      <div class="logs" id="logs">
+        <div class="log-entry">
+          <span class="log-time">[Ready]</span>
+          Waiting for connection...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let socket = null;
+    let isConnected = false;
+    let locationUpdateCount = 0;
+    
+    const form = document.getElementById('trackingForm');
+    const statusContainer = document.getElementById('statusContainer');
+    const statusList = document.getElementById('statusList');
+    const locationCard = document.getElementById('locationCard');
+    const locationDetails = document.getElementById('locationDetails');
+    const logsContainer = document.getElementById('logs');
+    const connectBtn = document.getElementById('connectBtn');
+    const mapPlaceholder = document.getElementById('mapPlaceholder');
+    
+    function addLog(message, type = 'info') {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+      const logEntry = document.createElement('div');
+      logEntry.className = 'log-entry';
+      
+      let color = '#00ff00';
+      if (type === 'error') color = '#ff6b6b';
+      if (type === 'success') color = '#51cf66';
+      if (type === 'warning') color = '#ffd43b';
+      
+      logEntry.innerHTML = `<span class="log-time">[${timeStr}]</span><span style="color: ${color}">${message}</span>`;
+      logsContainer.appendChild(logEntry);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+    
+    function addStatus(icon, text, type = 'info') {
+      const statusItem = document.createElement('div');
+      statusItem.className = `status-item ${type}`;
+      statusItem.innerHTML = `
+        <span class="status-icon">${icon}</span>
+        <span class="status-text">${text}</span>
+      `;
+      statusList.appendChild(statusItem);
+      statusContainer.style.display = 'block';
+    }
+    
+    function clearStatus() {
+      statusList.innerHTML = '';
+      statusContainer.style.display = 'none';
+    }
+    
+    function updateLocation(data) {
+      locationUpdateCount++;
+      
+      const details = `
+        <div class="location-detail">
+          <span class="location-label">📍 Latitude</span>
+          <span class="location-value">${data.lat}</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">📍 Longitude</span>
+          <span class="location-value">${data.lng}</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">🚴 Speed</span>
+          <span class="location-value">${data.speed ? (data.speed * 3.6).toFixed(1) + ' km/h' : 'N/A'}</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">🧭 Heading</span>
+          <span class="location-value">${data.heading ? data.heading + '°' : 'N/A'}</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">🎯 Accuracy</span>
+          <span class="location-value">±${data.accuracy ? data.accuracy.toFixed(1) : 'N/A'} m</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">⏰ Last Update</span>
+          <span class="location-value">${new Date(data.timestamp).toLocaleTimeString()}</span>
+        </div>
+        <div class="location-detail">
+          <span class="location-label">🔄 Updates Received</span>
+          <span class="location-value">${locationUpdateCount}</span>
+        </div>
+      `;
+      
+      locationDetails.innerHTML = details;
+      locationCard.style.display = 'block';
+      mapPlaceholder.style.display = 'block';
+      
+      addLog(`📍 Location Update #${locationUpdateCount}: ${data.lat}, ${data.lng}`, 'success');
+    }
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const apiUrl = document.getElementById('apiUrl').value.trim();
+      const authToken = document.getElementById('authToken').value.trim();
+      const orderId = document.getElementById('orderId').value.trim();
+      const deliveryBoyId = document.getElementById('deliveryBoyId').value.trim();
+      
+      if (!apiUrl || !authToken || !orderId || !deliveryBoyId) {
+        alert('Please fill in all fields');
+        return;
+      }
+      
+      // Disable button
+      connectBtn.disabled = true;
+      connectBtn.textContent = '⏳ Connecting...';
+      
+      // Clear previous status
+      clearStatus();
+      locationCard.style.display = 'none';
+      locationUpdateCount = 0;
+      
+      addLog('🚀 Initializing Socket.IO connection...', 'info');
+      
+      try {
+        // Disconnect previous socket if exists
+        if (socket) {
+          socket.disconnect();
+        }
+        
+        // Create new socket connection
+        socket = io(apiUrl, {
+          auth: {
+            token: authToken
+          },
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000
+        });
+        
+        // Connection successful
+        socket.on('connect', () => {
+          isConnected = true;
+          addLog('✅ Socket connected successfully!', 'success');
+          addLog(`🔗 Socket ID: ${socket.id}`, 'info');
+          addStatus('✅', 'Connected to server', 'success');
+          
+          // Join order tracking room
+          addLog('📡 Joining order tracking room...', 'info');
+          socket.emit('customer:join-order', { 
+            orderId, 
+            deliveryBoyId 
+          }, (response) => {
+            if (response && response.success) {
+              addLog(`✅ Joined tracking room: ${response.room}`, 'success');
+              addStatus('🎯', `Tracking order: ${orderId}`, 'success');
+              connectBtn.textContent = '🟢 Connected & Tracking';
+            } else {
+              addLog('⚠️ Failed to join tracking room', 'warning');
+              addStatus('⚠️', 'Failed to join tracking room', 'error');
+              connectBtn.textContent = '🔴 Connection Error';
+              connectBtn.disabled = false;
+            }
+          });
+        });
+        
+        // Connection error
+        socket.on('connect_error', (error) => {
+          addLog(`❌ Connection error: ${error.message}`, 'error');
+          addStatus('❌', `Connection failed: ${error.message}`, 'error');
+          connectBtn.textContent = '🔴 Connection Failed - Retry';
+          connectBtn.disabled = false;
+        });
+        
+        // Disconnection
+        socket.on('disconnect', (reason) => {
+          isConnected = false;
+          addLog(`⚠️ Disconnected: ${reason}`, 'warning');
+          addStatus('⚠️', `Disconnected: ${reason}`, 'error');
+          connectBtn.textContent = '🟡 Disconnected - Reconnect';
+          connectBtn.disabled = false;
+        });
+        
+        // Live location updates
+        socket.on('delivery:live-location', (data) => {
+          addLog('📦 Received delivery:live-location event', 'info');
+          console.log('📍 Location data:', data);
+          updateLocation(data);
+        });
+        
+        // Order status updates
+        socket.on('order-status', (data) => {
+          addLog(`📦 Order status: ${data.status} - ${data.message}`, 'info');
+          addStatus('📦', `Status: ${data.status}`, 'info');
+        });
+        
+        // Order picked up
+        socket.on('order:picked-up', (data) => {
+          addLog('📦 Order picked up!', 'success');
+          addStatus('📦', 'Order picked up by delivery partner', 'success');
+        });
+        
+        // Delivery completed
+        socket.on('delivery:completed', (data) => {
+          addLog('✅ Delivery completed!', 'success');
+          addStatus('✅', 'Order delivered successfully', 'success');
+          locationCard.style.display = 'none';
+        });
+        
+        // Location error
+        socket.on('location:error', (data) => {
+          addLog(`❌ Location error: ${data.message}`, 'error');
+          addStatus('❌', data.message, 'error');
+        });
+        
+        // Debug: Log all socket events
+        socket.onAny((eventName, ...args) => {
+          console.log(`📡 Socket Event: ${eventName}`, args);
+        });
+        
+      } catch (error) {
+        addLog(`❌ Error: ${error.message}`, 'error');
+        addStatus('❌', `Error: ${error.message}`, 'error');
+        connectBtn.textContent = '🔴 Error - Retry';
+        connectBtn.disabled = false;
+      }
+    });
+    
+    // Disconnect on page close
+    window.addEventListener('beforeunload', () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    });
+  </script>
+</body>
+</html>

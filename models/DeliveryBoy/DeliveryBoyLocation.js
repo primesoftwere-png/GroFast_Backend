@@ -37,6 +37,18 @@ const DeliveryBoyLocationSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      required: true,
+      default: [0, 0]
+    }
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -62,18 +74,8 @@ DeliveryBoyLocationSchema.index({
   location: '2dsphere' 
 });
 
-
-
 DeliveryBoyLocationSchema.index({ 
   orderId: 1 
-});
-
-// Virtual for GeoJSON format
-DeliveryBoyLocationSchema.virtual('location').get(function() {
-  return {
-    type: 'Point',
-    coordinates: [this.longitude, this.latitude]
-  };
 });
 
 // Pre-save hook

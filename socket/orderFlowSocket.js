@@ -10,6 +10,7 @@ const DeliveryBoyLocation = require('../models/DeliveryBoy/DeliveryBoyLocation')
 const Shop = require('../models/ShopKeeper/Shop');
 const Notification = require('../models/Customer/Notification');
 const DeliveryBoyNotification = require('../models/DeliveryBoy/DeliveryBoyNotification');
+const cacheService = require('../services/cache.service');
 
 /**
  * Initialize Socket.IO for real-time order flow
@@ -197,9 +198,10 @@ function initializeOrderFlowSocket(io) {
         socket.join(roomName);
         console.log(`✅ User ${socket.userId} joined tracking room: ${roomName}`);
         
-        // Fetch current order status and delivery boy location
-        const order = await Order.findOne({ orderToken })
-          .populate('deliveryBoyId'); // references User profile usually
+        // Fetch current order status and delivery boy location using token or number
+        const order = await Order.findOne({ 
+          $or: [{ orderToken: orderToken }, { orderNumber: orderToken }] 
+        }).populate('deliveryBoyId');
 
         if (order) {
           // Emit initial status
@@ -464,6 +466,15 @@ function initializeOrderFlowSocket(io) {
         socket.join(orderRoom);
         console.log(`✓ Delivery Boy joined room: ${orderRoom}`);
 
+        // Fetch current location of delivery boy
+        let initialLat = null;
+        let initialLng = null;
+        const dbLocation = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbId });
+        if (dbLocation) {
+          initialLat = dbLocation.latitude;
+          initialLng = dbLocation.longitude;
+        }
+
         // Notify customer
         io.to(order.customerId._id.toString()).emit('order-status', {
           orderId: order._id,
@@ -473,7 +484,9 @@ function initializeOrderFlowSocket(io) {
           deliveryBoy: {
             name: deliveryBoy.userId.fullname,
             phone: deliveryBoy.userId.phone,
-            vehicleType: deliveryBoy.vehicleType
+            vehicleType: deliveryBoy.vehicleType,
+            lat: initialLat,
+            lng: initialLng
           },
           timestamp: new Date()
         });
@@ -488,10 +501,25 @@ function initializeOrderFlowSocket(io) {
           deliveryBoy: {
             name: deliveryBoy.userId.fullname,
             phone: deliveryBoy.userId.phone,
-            vehicleType: deliveryBoy.vehicleType
+            vehicleType: deliveryBoy.vehicleType,
+            lat: initialLat,
+            lng: initialLng
           },
           timestamp: new Date()
         });
+
+        if (initialLat !== null && initialLng !== null) {
+          const locPayload = {
+            orderId: order._id,
+            orderToken: order.orderToken,
+            orderNumber: order.orderNumber,
+            lat: initialLat,
+            lng: initialLng,
+            timestamp: new Date()
+          };
+          io.to(`tracking_${order.orderToken}`).emit('live-location', locPayload);
+          io.to(order.customerId._id.toString()).emit('live-location', locPayload);
+        }
 
         // Notify shopkeeper
         io.to(order.shopId._id.toString()).emit('delivery-assigned', {
@@ -624,6 +652,7 @@ function initializeOrderFlowSocket(io) {
               orderId: orderId,
               latitude: latitude,
               longitude: longitude,
+              location: { type: 'Point', coordinates: [longitude, latitude] },
               accuracy: accuracy ? parseFloat(accuracy) : null,
               speed: speed ? parseFloat(speed) : null,
               heading: heading ? parseFloat(heading) : null,
@@ -717,6 +746,59 @@ function initializeOrderFlowSocket(io) {
       }
     });
 
+    /**
+     * Frontend manually requests live location
+     */
+    const handleLocationRequest = async ({ orderId, orderNumber, deliveryBoyId }) => {
+      console.log(`\n========================================`);
+      console.log(`📡 [LOCATION REQUEST] Received manual fetch request`);
+      console.log(`Order ID: ${orderId}, Order Number: ${orderNumber}, DB ID: ${deliveryBoyId}`);
+      try {
+        let targetOrder = null;
+        if (orderId) targetOrder = await Order.findById(orderId).populate('deliveryBoyId');
+        else if (orderNumber) targetOrder = await Order.findOne({ 
+          $or: [{ orderToken: orderNumber }, { orderNumber: orderNumber }] 
+        }).populate('deliveryBoyId');
+        
+        if (targetOrder && targetOrder.deliveryBoyId) {
+           const dbUserId = targetOrder.deliveryBoyId._id || targetOrder.deliveryBoyId;
+           let loc = await cacheService.get(`location:${dbUserId}`);
+           
+           if (!loc) {
+             console.log(`⚠️ [CACHE MISS] Falling back to MongoDB for DB ID: ${dbUserId}`);
+             loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+           }
+
+           if (loc) {
+             console.log(`✅ [SUCCESS] Found location:`, { lat: loc.lat || loc.latitude, lng: loc.lng || loc.longitude });
+             const locPayload = {
+               orderId: targetOrder._id,
+               orderToken: targetOrder.orderToken,
+               orderNumber: targetOrder.orderNumber,
+               lat: loc.lat || loc.latitude,
+               lng: loc.lng || loc.longitude,
+               speed: loc.speed,
+               heading: loc.heading,
+               accuracy: loc.accuracy,
+               timestamp: loc.timestamp || loc.updatedAt
+             };
+             socket.emit('live-location', locPayload);
+             console.log(`🚀 [EMITTED] Sent live-location back to requester`);
+           } else {
+             console.log(`❌ [NOT FOUND] No location found in cache OR MongoDB for delivery boy ${dbUserId}.`);
+           }
+        } else {
+           console.log(`❌ [ERROR] Order not found or no delivery boy assigned`);
+        }
+      } catch (err) {
+        console.error('Error fetching live location on demand:', err);
+      }
+      console.log(`========================================\n`);
+    };
+
+    socket.on('request-location', handleLocationRequest);
+    socket.on('get-live-location', handleLocationRequest);
+
     // ==================== DISCONNECT HANDLER ====================
     
     socket.on('disconnect', async () => {
@@ -756,7 +838,9 @@ function initializeOrderFlowSocket(io) {
 
         let order;
         if (orderToken) {
-          order = await Order.findOne({ orderToken }).populate('deliveryBoyId');
+          order = await Order.findOne({ 
+            $or: [{ orderToken: orderToken }, { orderNumber: orderToken }] 
+          }).populate('deliveryBoyId');
         } else if (orderId) {
           order = await Order.findById(orderId).populate('deliveryBoyId');
         }
@@ -769,38 +853,15 @@ function initializeOrderFlowSocket(io) {
             orderId: order._id,
             orderToken: order.orderToken,
             orderNumber: order.orderNumber,
-            status: order.orderStatus
+            status: order.orderStatus,
+            deliveryBoyId: order.deliveryBoyId ? (order.deliveryBoyId._id || order.deliveryBoyId) : null
           };
 
           io.to(`tracking_${order.orderToken}`).emit('tracking-status', statusPayload);
+          io.to(`tracking_${order.orderNumber}`).emit('tracking-status', statusPayload);
           io.to(`order_${order._id}`).emit('tracking-status', statusPayload);
           if (order.customerId) {
             io.to(order.customerId.toString()).emit('tracking-status', statusPayload);
-          }
-
-          // Fetch and emit latest location if delivery boy is assigned
-          if (order.deliveryBoyId) {
-            const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
-            const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
-            if (loc) {
-              const locPayload = {
-                orderId: order._id,
-                orderToken: order.orderToken,
-                orderNumber: order.orderNumber,
-                lat: loc.latitude,
-                lng: loc.longitude,
-                heading: loc.heading,
-                speed: loc.speed,
-                timestamp: loc.updatedAt
-              };
-              
-              io.to(`tracking_${order.orderToken}`).emit('live-location', locPayload);
-              io.to(`order_${order._id}`).emit('live-location', locPayload);
-              // Send perfectly to customer panel to that customer id
-              if (order.customerId) {
-                io.to(order.customerId.toString()).emit('live-location', locPayload);
-              }
-            }
           }
         }
       }

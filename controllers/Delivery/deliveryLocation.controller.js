@@ -1,6 +1,6 @@
 // controllers/Delivery/deliveryLocation.controller.js
 const DeliveryBoy = require("../../models/DeliveryBoy/DeliveryBoy");
-const DeliveryBoyLocation = require("../../models/DeliveryBoy/DeliveryBoyLocation");
+const cacheService = require("../../services/cache.service");
 
 // ✅ Update Current Location
 module.exports.updateLocation = async (req, res) => {
@@ -51,14 +51,12 @@ module.exports.updateLocation = async (req, res) => {
       });
     }
 
-    // Update or create location record
-    let location = await DeliveryBoyLocation.findOne({ deliveryBoyId });
-
     const locationData = {
       deliveryBoyId: deliveryBoyId,
       orderId: deliveryBoy.activeOrderId || null,
       latitude: lat,
       longitude: lng,
+      location: { type: 'Point', coordinates: [lng, lat] },
       accuracy: accuracy ? parseFloat(accuracy) : null,
       speed: speed ? parseFloat(speed) : null,
       heading: heading ? parseFloat(heading) : null,
@@ -66,39 +64,18 @@ module.exports.updateLocation = async (req, res) => {
       updatedAt: Date.now()
     };
 
-    const historyEntry = {
-      latitude: lat,
-      longitude: lng,
-      speed: speed ? parseFloat(speed) : null,
-      heading: heading ? parseFloat(heading) : null,
-      timestamp: Date.now()
-    };
+    // Cache the location in Redis (or in-memory fallback) for 1 hour
+    await cacheService.setEx(`location:${deliveryBoyId}`, 3600, locationData);
 
-    if (location) {
-      // Update existing location
-      location = await DeliveryBoyLocation.findOneAndUpdate(
-        { deliveryBoyId },
-        { 
-          $set: locationData,
-          $push: { locationHistory: historyEntry }
-        },
-        { new: true }
-      );
-    } else {
-      // Create new location record
-      location = await DeliveryBoyLocation.create({
-        ...locationData,
-        locationHistory: [historyEntry]
-      });
-    }
+    // Also broadcast over socket if possible, though usually the mobile app will emit location:update socket event directly.
 
     return res.status(200).json({
       success: true,
       message: "Location updated successfully",
       data: {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        updatedAt: location.updatedAt
+        latitude: lat,
+        longitude: lng,
+        updatedAt: locationData.updatedAt
       }
     });
 
@@ -117,12 +94,12 @@ module.exports.getCurrentLocation = async (req, res) => {
   try {
     const deliveryBoyId = req.user._id;
 
-    const location = await DeliveryBoyLocation.findOne({ deliveryBoyId });
+    const location = await cacheService.get(`location:${deliveryBoyId}`);
 
     if (!location) {
       return res.status(404).json({
         success: false,
-        message: "Location not found. Please update your location first."
+        message: "Location not found in cache. Please update your location first."
       });
     }
 

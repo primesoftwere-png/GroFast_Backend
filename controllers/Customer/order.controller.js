@@ -359,6 +359,19 @@ module.exports.createOrder = async (req, res) => {
         console.error(`⚠ Failed to save notification for shopkeeper ${orderData.shopId}:`, notifError.message);
       }
 
+      if (io) {
+        const orderStatusPayload = {
+           orderId: order._id,
+           orderToken: order.orderToken,
+           orderNumber: order.orderNumber,
+           status: order.orderStatus,
+           message: 'Order placed successfully',
+           timestamp: new Date()
+        };
+        io.to(userId.toString()).emit('order-status', orderStatusPayload);
+        io.to(`tracking_${order.orderToken}`).emit('order-status', orderStatusPayload);
+      }
+
       createdOrders.push(order);
     }
 
@@ -955,84 +968,7 @@ module.exports.getCustomerOrders = async (req, res) => {
   }
 };
 
-/**
- * Track Delivery Boy Location
- */
-module.exports.trackDelivery = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const userId = req.user._id;
-
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // Verify access
-    if (order.customerId.toString() !== userId.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized to track this order'
-      });
-    }
-
-    // If order doesn't have a delivery boy assigned yet, return the status without location
-    if (!order.deliveryBoyId) {
-      return res.json({
-        success: true,
-        data: {
-          orderId: order._id,
-          orderStatus: order.orderStatus,
-          deliveryBoyId: null,
-          location: null
-        }
-      });
-    }
-
-    const location = await DeliveryBoyLocation.findOne({ deliveryBoyId: order.deliveryBoyId });
-
-    if (!location) {
-      return res.json({
-        success: true,
-        data: {
-          orderId: order._id,
-          orderStatus: order.orderStatus,
-          deliveryBoyId: order.deliveryBoyId,
-          location: null
-        }
-      });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        orderId: order._id,
-        orderStatus: order.orderStatus,
-        deliveryBoyId: order.deliveryBoyId,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          speed: location.speed,
-          heading: location.heading,
-          accuracy: location.accuracy,
-          updatedAt: location.updatedAt
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Error tracking delivery:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to track delivery',
-      error: error.message
-    });
-  }
-};
+// Removed trackDelivery API endpoint - Location tracking is now fully handled via Socket.io real-time connection.
 
 /**
  * Get order by token

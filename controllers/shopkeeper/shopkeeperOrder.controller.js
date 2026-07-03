@@ -79,69 +79,80 @@ module.exports.getOrders = async (req, res) => {
 
     console.log('Query being used:', JSON.stringify(query));
 
-    // Check if any orders exist for this shopId
-    const allOrdersCount = await Order.countDocuments({
-      $or: [
-        { shopId: queryShopId },
-        { shopId: userId },
-        { shopId: shopkeeper._id },
-        { shopId: shopkeeper.userId }
-      ]
-    });
-    console.log('Total orders for shopId (any status):', allOrdersCount);
-
     // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Get orders
-    const orders = await Order.find(query)
-      .populate('customerId', 'fullname phone email')
-      .populate('deliveryAddressId')
-      .populate('deliveryBoyId', 'fullname phone')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
+    // Get orders and total count in parallel
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .populate('customerId', 'fullname phone email')
+        .populate('deliveryAddressId')
+        .populate('deliveryBoyId', 'fullname phone')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Order.countDocuments(query)
+    ]);
 
     console.log('Orders found:', orders.length);
 
+    // Fetch all order items in a single query
+    const orderIds = orders.map(o => o._id);
+    const allOrderItems = await OrderItem.find({ orderId: { $in: orderIds } })
+      .populate('productId', 'productName productImage productPrice');
+    
+    const orderItemsMap = {};
+    allOrderItems.forEach(item => {
+      const oid = item.orderId.toString();
+      if (!orderItemsMap[oid]) orderItemsMap[oid] = [];
+      orderItemsMap[oid].push(item);
+    });
+
     // Get order items for each order and include pickup OTP
-    const ordersWithItems = await Promise.all(
-      orders.map(async (order) => {
-        const items = await getOrderItemsForResponse(order);
+    const ordersWithItems = orders.map((order) => {
+      const orderObj = order.toObject();
+      const oid = order._id.toString();
 
-        const orderObj = order.toObject();
-        
-        // Include pickup OTP in response if it exists
-        if (orderObj.pickupOTP && orderObj.pickupOTP.code) {
-          orderObj.pickupOTP = {
-            code: orderObj.pickupOTP.code,
-            expiresAt: orderObj.pickupOTP.expiresAt,
-            verified: orderObj.pickupOTP.verified,
-            message: 'Share this OTP with the delivery boy for order pickup'
-          };
-        }
-        
-        // Include delivery OTP in response if it exists
-        if (orderObj.deliveryOTP && orderObj.deliveryOTP.code) {
-          orderObj.deliveryOTP = {
-            code: orderObj.deliveryOTP.code,
-            expiresAt: orderObj.deliveryOTP.expiresAt,
-            verified: orderObj.deliveryOTP.verified,
-            message: 'Customer will share this OTP with delivery boy for order delivery'
-          };
-        }
-        
-        return {
-          ...orderObj,
-          items: items
+      let items = orderItemsMap[oid];
+      if (!items || items.length === 0) {
+        items = (orderObj.items || []).map((item) => ({
+          _id: item._id,
+          orderId: order._id,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice: item.totalPrice
+        }));
+      }
+
+      // Include pickup OTP in response if it exists
+      if (orderObj.pickupOTP && orderObj.pickupOTP.code) {
+        orderObj.pickupOTP = {
+          code: orderObj.pickupOTP.code,
+          expiresAt: orderObj.pickupOTP.expiresAt,
+          verified: orderObj.pickupOTP.verified,
+          message: 'Share this OTP with the delivery boy for order pickup'
         };
-      })
-    );
-
-    // Get total count
-    const total = await Order.countDocuments(query);
+      }
+      
+      // Include delivery OTP in response if it exists
+      if (orderObj.deliveryOTP && orderObj.deliveryOTP.code) {
+        orderObj.deliveryOTP = {
+          code: orderObj.deliveryOTP.code,
+          expiresAt: orderObj.deliveryOTP.expiresAt,
+          verified: orderObj.deliveryOTP.verified,
+          message: 'Customer will share this OTP with delivery boy for order delivery'
+        };
+      }
+      
+      return {
+        ...orderObj,
+        items: items
+      };
+    });
 
     console.log('========================================');
 
@@ -831,46 +842,55 @@ module.exports.getOrderStats = async (req, res) => {
       ]
     };
 
-    // Get counts by status
-    const pending = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'PENDING' });
-    const confirmed = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'CONFIRMED' });
-    const assigned = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'ASSIGNED' });
-    const pickedUp = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'PICKED_UP' });
-    const inTransit = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'IN_TRANSIT' });
-    const delivered = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'DELIVERED' });
-    const cancelled = await Order.countDocuments({ ...shopIdQuery, orderStatus: 'CANCELLED' });
-
-    // Get total revenue (delivered orders)
-    const revenueResult = await Order.aggregate([
-      { $match: { ...shopIdQuery, orderStatus: 'DELIVERED' } },
-      { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
-    ]);
-    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
-
-    // Get today's orders
+    // Get today's orders start date
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const todayOrders = await Order.countDocuments({
-      ...shopIdQuery,
-      createdAt: { $gte: todayStart }
-    });
+
+    // Fetch order stats and today's orders in parallel using aggregation for stats
+    const [statsResult, todayOrders] = await Promise.all([
+      Order.aggregate([
+        { $match: shopIdQuery },
+        { $group: {
+            _id: null,
+            pending: { $sum: { $cond: [{ $eq: ['$orderStatus', 'PENDING'] }, 1, 0] } },
+            confirmed: { $sum: { $cond: [{ $eq: ['$orderStatus', 'CONFIRMED'] }, 1, 0] } },
+            assigned: { $sum: { $cond: [{ $eq: ['$orderStatus', 'ASSIGNED'] }, 1, 0] } },
+            pickedUp: { $sum: { $cond: [{ $eq: ['$orderStatus', 'PICKED_UP'] }, 1, 0] } },
+            inTransit: { $sum: { $cond: [{ $eq: ['$orderStatus', 'IN_TRANSIT'] }, 1, 0] } },
+            delivered: { $sum: { $cond: [{ $eq: ['$orderStatus', 'DELIVERED'] }, 1, 0] } },
+            cancelled: { $sum: { $cond: [{ $eq: ['$orderStatus', 'CANCELLED'] }, 1, 0] } },
+            totalRevenue: { 
+              $sum: { $cond: [{ $eq: ['$orderStatus', 'DELIVERED'] }, '$totalAmount', 0] } 
+            }
+        }}
+      ]),
+      Order.countDocuments({
+        ...shopIdQuery,
+        createdAt: { $gte: todayStart }
+      })
+    ]);
+
+    const stats = statsResult[0] || {
+      pending: 0, confirmed: 0, assigned: 0, pickedUp: 0, 
+      inTransit: 0, delivered: 0, cancelled: 0, totalRevenue: 0
+    };
 
     return res.status(200).json({
       success: true,
       message: 'Order statistics retrieved successfully',
       data: {
         orderCounts: {
-          pending: pending,
-          confirmed: confirmed,
-          assigned: assigned,
-          pickedUp: pickedUp,
-          inTransit: inTransit,
-          delivered: delivered,
-          cancelled: cancelled,
-          total: pending + confirmed + assigned + pickedUp + inTransit + delivered + cancelled
+          pending: stats.pending,
+          confirmed: stats.confirmed,
+          assigned: stats.assigned,
+          pickedUp: stats.pickedUp,
+          inTransit: stats.inTransit,
+          delivered: stats.delivered,
+          cancelled: stats.cancelled,
+          total: stats.pending + stats.confirmed + stats.assigned + stats.pickedUp + stats.inTransit + stats.delivered + stats.cancelled
         },
         revenue: {
-          total: totalRevenue,
+          total: stats.totalRevenue,
           currency: 'INR'
         },
         today: {

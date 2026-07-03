@@ -20,14 +20,12 @@ router.get('/categorized/:userId', orderController.getCategorizedOrders);
 router.get('/recent/:orderToken', orderController.getOrderByToken);
 router.get('/:orderId', authMiddleware.userMiddlewere, orderController.getOrderDetails);
 
-// 4. Track Delivery Boy
-router.get('/:orderId/track', authMiddleware.userMiddlewere, orderController.trackDelivery);
+// 4. Track Delivery Boy (Removed - Using Socket.io)
 
 console.log('✅ Real-time order flow routes registered:');
 console.log('   - POST /create - Create new order');
 console.log('   - GET /my-orders - Get customer orders');
 console.log('   - GET /recent/:orderToken - Get order by token');
 console.log('   - GET /:orderId - Get order details');
-console.log('   - GET /:orderId/track - Track delivery boy location');
 
 module.exports = router;
