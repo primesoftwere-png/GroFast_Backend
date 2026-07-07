@@ -1,4 +1,5 @@
 // controllers/shopkeeper/shopkeeperOrder.controller.js
+const mongoose = require('mongoose');
 const Order = require('../../models/Customer/Order');
 const OrderItem = require('../../models/Customer/OrderItem');
 const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
@@ -49,28 +50,49 @@ module.exports.getOrders = async (req, res) => {
       });
     }
 
+    // Get shop to include its ID in queries
+    const shop = await Shop.findOne({ shopkeeperId: shopkeeper._id });
+
     // Determine which shopId to use for query
     let queryShopId = shopId || userId; // Use provided shopId or default to logged-in userId
     
     console.log('Using shopId for query:', queryShopId);
 
     // Build query - check multiple possible shopId values
+    const queryShopIdValues = [
+      userId,
+      shopkeeper._id,
+      shopkeeper.userId
+    ];
+    
+    if (shop) {
+      queryShopIdValues.push(shop._id);
+    }
+    
+    if (shopId) {
+      queryShopIdValues.push(shopId);
+    }
+
+    // Filter valid ObjectIds and convert them
+    const validShopIds = queryShopIdValues
+      .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
     const query = {
-      $or: [
-        { shopId: queryShopId },           // Exact match
-        { shopId: userId },                // User._id
-        { shopId: shopkeeper._id },        // Shopkeeper._id
-        { shopId: shopkeeper.userId }      // Shopkeeper.userId
-      ]
+      shopId: { $in: validShopIds }
     };
     
     if (status) {
       if (status.toUpperCase() === 'ACTIVE') {
         query.orderStatus = { $nin: ['DELIVERED', 'CANCELLED', 'EXPIRED'] };
-      } else if (status.toUpperCase() === 'ACCEPTED') {
+      } else if (status.toUpperCase() === 'ACCEPTED' || status.toUpperCase() === 'CONFIRMED') {
         query.orderStatus = { $in: ['ACCEPTED', 'CONFIRMED'] };
+      } else if (status.toUpperCase() === 'ASSIGNED' || status.toUpperCase() === 'ASSIGNED_TO_DELIVERY') {
+        query.orderStatus = { $in: ['ASSIGNED', 'ASSIGNED_TO_DELIVERY'] };
+      } else if (status.toUpperCase() === 'IN_TRANSIT' || status.toUpperCase() === 'OUT_FOR_DELIVERY') {
+        query.orderStatus = { $in: ['IN_TRANSIT', 'OUT_FOR_DELIVERY'] };
       } else {
-        const validStatuses = ['PENDING', 'CONFIRMED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', 'EXPIRED', 'READY_FOR_PICKUP'];
+        const validStatuses = ['PENDING', 'CONFIRMED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', 'EXPIRED', 'READY_FOR_PICKUP', 'ASSIGNED_TO_DELIVERY', 'OUT_FOR_DELIVERY', 'ACCEPTED'];
         if (validStatuses.includes(status.toUpperCase())) {
           query.orderStatus = status.toUpperCase();
         }
@@ -129,11 +151,12 @@ module.exports.getOrders = async (req, res) => {
       }
 
       // Include pickup OTP in response if it exists
-      if (orderObj.pickupOTP && orderObj.pickupOTP.code) {
+      const otpCode = (orderObj.pickupOTP && orderObj.pickupOTP.code) || orderObj.otp;
+      if (otpCode) {
         orderObj.pickupOTP = {
-          code: orderObj.pickupOTP.code,
-          expiresAt: orderObj.pickupOTP.expiresAt,
-          verified: orderObj.pickupOTP.verified,
+          code: otpCode,
+          expiresAt: (orderObj.pickupOTP && orderObj.pickupOTP.expiresAt) || null,
+          verified: (orderObj.pickupOTP && orderObj.pickupOTP.verified) || orderObj.otpVerified || false,
           message: 'Share this OTP with the delivery boy for order pickup'
         };
       }
@@ -833,13 +856,25 @@ module.exports.getOrderStats = async (req, res) => {
       });
     }
 
+    const queryShopIdValues = [
+      userId,
+      shopkeeper._id,
+      shopkeeper.userId,
+      shop._id
+    ];
+    
+    if (req.query.shopId) {
+      queryShopIdValues.push(req.query.shopId);
+    }
+
+    // Filter valid ObjectIds and convert them
+    const validShopIds = queryShopIdValues
+      .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
     // shopId in Order model references User._id (shopkeeper's userId)
     const shopIdQuery = {
-      $or: [
-        { shopId: userId },
-        { shopId: shopkeeper._id },
-        { shopId: shopkeeper.userId }
-      ]
+      shopId: { $in: validShopIds }
     };
 
     // Get today's orders start date
@@ -853,10 +888,10 @@ module.exports.getOrderStats = async (req, res) => {
         { $group: {
             _id: null,
             pending: { $sum: { $cond: [{ $eq: ['$orderStatus', 'PENDING'] }, 1, 0] } },
-            confirmed: { $sum: { $cond: [{ $eq: ['$orderStatus', 'CONFIRMED'] }, 1, 0] } },
-            assigned: { $sum: { $cond: [{ $eq: ['$orderStatus', 'ASSIGNED'] }, 1, 0] } },
+            confirmed: { $sum: { $cond: [{ $in: ['$orderStatus', ['CONFIRMED', 'ACCEPTED']] }, 1, 0] } },
+            assigned: { $sum: { $cond: [{ $in: ['$orderStatus', ['ASSIGNED', 'ASSIGNED_TO_DELIVERY']] }, 1, 0] } },
             pickedUp: { $sum: { $cond: [{ $eq: ['$orderStatus', 'PICKED_UP'] }, 1, 0] } },
-            inTransit: { $sum: { $cond: [{ $eq: ['$orderStatus', 'IN_TRANSIT'] }, 1, 0] } },
+            inTransit: { $sum: { $cond: [{ $in: ['$orderStatus', ['IN_TRANSIT', 'OUT_FOR_DELIVERY']] }, 1, 0] } },
             delivered: { $sum: { $cond: [{ $eq: ['$orderStatus', 'DELIVERED'] }, 1, 0] } },
             cancelled: { $sum: { $cond: [{ $eq: ['$orderStatus', 'CANCELLED'] }, 1, 0] } },
             totalRevenue: { 
@@ -887,6 +922,7 @@ module.exports.getOrderStats = async (req, res) => {
           inTransit: stats.inTransit,
           delivered: stats.delivered,
           cancelled: stats.cancelled,
+          active: stats.pending + stats.confirmed + stats.assigned + stats.pickedUp + stats.inTransit,
           total: stats.pending + stats.confirmed + stats.assigned + stats.pickedUp + stats.inTransit + stats.delivered + stats.cancelled
         },
         revenue: {
