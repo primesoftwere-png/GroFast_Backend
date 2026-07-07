@@ -178,11 +178,19 @@ function initializeDeliveryTrackingSocket(io) {
         console.log(`[Tracking Socket] Customer/Admin ${userId} joined room ${roomName}`);
         
         // Immediately fetch the latest cached location upon joining (Reconnection Handling)
-        if (deliveryBoyId) {
-          let loc = await cacheService.get(`location:${deliveryBoyId}`);
+        let activeDeliveryBoyId = deliveryBoyId;
+        if (!activeDeliveryBoyId && orderId) {
+          const order = await Order.findById(orderId).select('deliveryBoyId');
+          if (order && order.deliveryBoyId) {
+            activeDeliveryBoyId = order.deliveryBoyId.toString();
+          }
+        }
+
+        if (activeDeliveryBoyId) {
+          let loc = await cacheService.get(`location:${activeDeliveryBoyId}`);
           
           if (!loc) {
-            const dbLoc = await DeliveryBoyLocation.findOne({ deliveryBoyId });
+            const dbLoc = await DeliveryBoyLocation.findOne({ deliveryBoyId: activeDeliveryBoyId });
             if (dbLoc) {
               loc = {
                 lat: dbLoc.latitude,
@@ -198,7 +206,7 @@ function initializeDeliveryTrackingSocket(io) {
           if (loc) {
             socket.emit('delivery:live-location', {
               orderId,
-              deliveryBoyId,
+              deliveryBoyId: activeDeliveryBoyId,
               ...loc,
               lat: loc.lat || loc.latitude,
               lng: loc.lng || loc.longitude,

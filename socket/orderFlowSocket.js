@@ -215,17 +215,41 @@ function initializeOrderFlowSocket(io) {
           // Fetch location if assigned
           if (order.deliveryBoyId) {
             const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
-            const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
-            if (loc) {
+            const cacheService = require('../../services/cache.service');
+            let locData = await cacheService.get(`location:${dbUserId}`);
+            
+            if (!locData) {
+              const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+              if (loc) {
+                locData = {
+                  lat: loc.latitude,
+                  lng: loc.longitude,
+                  heading: loc.heading,
+                  speed: loc.speed,
+                  timestamp: loc.updatedAt
+                };
+              }
+            } else {
+               // Normalize cache data just in case
+               locData = {
+                 lat: locData.lat || locData.latitude,
+                 lng: locData.lng || locData.longitude,
+                 heading: locData.heading,
+                 speed: locData.speed,
+                 timestamp: locData.timestamp || locData.updatedAt
+               };
+            }
+
+            if (locData) {
               socket.emit('live-location', {
                 orderId: order._id,
                 orderToken: order.orderToken,
                 orderNumber: order.orderNumber,
-                lat: loc.latitude,
-                lng: loc.longitude,
-                heading: loc.heading,
-                speed: loc.speed,
-                timestamp: loc.updatedAt
+                lat: locData.lat,
+                lng: locData.lng,
+                heading: locData.heading,
+                speed: locData.speed,
+                timestamp: locData.timestamp
               });
             }
           }
