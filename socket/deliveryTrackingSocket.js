@@ -102,17 +102,53 @@ function initializeDeliveryTrackingSocket(io) {
         const locData = { lat, lng, speed, heading, accuracy, timestamp: timestamp || Date.now() };
         await cacheService.setEx(`location:${userId}`, 3600, locData); // Cache for 1 hour
 
-        // Broadcast directly to the order room (Customer / Admin)
-        const roomName = `order:${orderId}`;
-        
         const broadcastPayload = {
           orderId,
           deliveryBoyId: userId,
           ...locData
         };
 
-        io.to(roomName).emit('delivery:live-location', broadcastPayload);
-        console.log(`🚀 [SOCKET BROADCAST] Emitted 'delivery:live-location' to room: ${roomName}`);
+        // Broadcast to order:${orderId} room (deliveryTrackingSocket room)
+        const orderRoomName = `order:${orderId}`;
+        io.to(orderRoomName).emit('delivery:live-location', broadcastPayload);
+        console.log(`🚀 [SOCKET BROADCAST] Emitted 'delivery:live-location' to room: ${orderRoomName}`);
+
+        // Also broadcast to tracking_${orderToken} room and customer personal room
+        // so customers who joined via 'join-tracking' also receive the location
+        try {
+          const order = await Order.findById(orderId).select('orderToken orderNumber customerId').lean();
+          if (order) {
+            const trackingPayload = {
+              orderId,
+              orderToken: order.orderToken,
+              orderNumber: order.orderNumber,
+              deliveryBoyId: userId,
+              lat,
+              lng,
+              speed,
+              heading,
+              accuracy,
+              timestamp: locData.timestamp
+            };
+
+            // Emit to tracking room (customer joins via 'join-tracking')
+            if (order.orderToken) {
+              io.to(`tracking_${order.orderToken}`).emit('live-location', trackingPayload);
+              io.to(`tracking_${order.orderToken}`).emit('delivery:live-location', trackingPayload);
+              console.log(`🚀 [SOCKET BROADCAST] Emitted to tracking room: tracking_${order.orderToken}`);
+            }
+
+            // Emit to customer personal room
+            if (order.customerId) {
+              io.to(order.customerId.toString()).emit('live-location', trackingPayload);
+              io.to(order.customerId.toString()).emit('delivery:live-location', trackingPayload);
+              console.log(`🚀 [SOCKET BROADCAST] Emitted to customer: ${order.customerId}`);
+            }
+          }
+        } catch (orderErr) {
+          console.error('Error looking up order for tracking broadcast:', orderErr.message);
+        }
+
         console.log(`========================================\n`);
         
         if (typeof ack === 'function') ack({ success: true });
@@ -176,13 +212,23 @@ function initializeDeliveryTrackingSocket(io) {
         const roomName = `order:${orderId}`;
         socket.join(roomName);
         console.log(`[Tracking Socket] Customer/Admin ${userId} joined room ${roomName}`);
+
+        // Also join the tracking_${orderToken} room for cross-compatibility
+        const orderDoc = await Order.findById(orderId).select('orderToken deliveryBoyId').lean();
+        if (orderDoc && orderDoc.orderToken) {
+          socket.join(`tracking_${orderDoc.orderToken}`);
+          console.log(`[Tracking Socket] Customer/Admin ${userId} also joined room tracking_${orderDoc.orderToken}`);
+        }
         
         // Immediately fetch the latest cached location upon joining (Reconnection Handling)
         let activeDeliveryBoyId = deliveryBoyId;
+        if (!activeDeliveryBoyId && orderDoc && orderDoc.deliveryBoyId) {
+          activeDeliveryBoyId = orderDoc.deliveryBoyId.toString();
+        }
         if (!activeDeliveryBoyId && orderId) {
-          const order = await Order.findById(orderId).select('deliveryBoyId');
-          if (order && order.deliveryBoyId) {
-            activeDeliveryBoyId = order.deliveryBoyId.toString();
+          const orderFallback = await Order.findById(orderId).select('deliveryBoyId');
+          if (orderFallback && orderFallback.deliveryBoyId) {
+            activeDeliveryBoyId = orderFallback.deliveryBoyId.toString();
           }
         }
 

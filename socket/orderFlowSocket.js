@@ -203,6 +203,13 @@ function initializeOrderFlowSocket(io) {
           $or: [{ orderToken: orderToken }, { orderNumber: orderToken }] 
         }).populate('deliveryBoyId');
 
+        // Also join the order:${orderId} room so the customer receives
+        // live location broadcasts from deliveryTrackingSocket
+        if (order) {
+          socket.join(`order:${order._id}`);
+          console.log(`✅ User ${socket.userId} also joined room: order:${order._id}`);
+        }
+
         if (order) {
           // Emit initial status
           socket.emit('tracking-status', {

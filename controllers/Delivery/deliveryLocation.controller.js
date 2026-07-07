@@ -70,8 +70,7 @@ module.exports.updateLocation = async (req, res) => {
     // Also broadcast over socket if possible, though usually the mobile app will emit location:update socket event directly.
     const io = req.app.get('io');
     if (io && deliveryBoy.activeOrderId) {
-      const roomName = `order:${deliveryBoy.activeOrderId}`;
-      io.to(roomName).emit('delivery:live-location', {
+      const broadcastPayload = {
         orderId: deliveryBoy.activeOrderId.toString(),
         deliveryBoyId: deliveryBoyId.toString(),
         lat: lat,
@@ -80,7 +79,29 @@ module.exports.updateLocation = async (req, res) => {
         heading: heading ? parseFloat(heading) : null,
         accuracy: accuracy ? parseFloat(accuracy) : null,
         timestamp: locationData.updatedAt
-      });
+      };
+
+      // Broadcast to order:${orderId} room
+      io.to(`order:${deliveryBoy.activeOrderId}`).emit('delivery:live-location', broadcastPayload);
+
+      // Also broadcast to tracking room and customer personal room
+      try {
+        const Order = require('../../models/Customer/Order');
+        const order = await Order.findById(deliveryBoy.activeOrderId).select('orderToken orderNumber customerId').lean();
+        if (order) {
+          const trackingPayload = { ...broadcastPayload, orderToken: order.orderToken, orderNumber: order.orderNumber };
+          if (order.orderToken) {
+            io.to(`tracking_${order.orderToken}`).emit('live-location', trackingPayload);
+            io.to(`tracking_${order.orderToken}`).emit('delivery:live-location', trackingPayload);
+          }
+          if (order.customerId) {
+            io.to(order.customerId.toString()).emit('live-location', trackingPayload);
+            io.to(order.customerId.toString()).emit('delivery:live-location', trackingPayload);
+          }
+        }
+      } catch (orderErr) {
+        console.error('Error broadcasting to tracking rooms:', orderErr.message);
+      }
     }
     return res.status(200).json({
       success: true,
