@@ -10,7 +10,7 @@ function initializeDeliveryTrackingSocket(io) {
   io.on('connection', (socket) => {
     // We rely on the authentication already performed by the root io.use() in orderFlowSocket.js
     const userId = socket.userId;
-    const role = socket.role;
+    const role = socket.userRole; // Fix: it was set as socket.userRole in orderFlowSocket.js
     if (!userId) return; // If unauthenticated
 
     console.log(`[Tracking Socket] Connected: User ${userId} (Role: ${role})`);
