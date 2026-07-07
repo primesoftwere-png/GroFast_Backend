@@ -217,7 +217,7 @@ module.exports.loginDeliveryBoy = async (req, res) => {
 
     // Check if blocked (but allow login if blocked due to COD limit)
     const deliveryBoy = await DeliveryBoy.findOne({ userId: user._id });
-    if (deliveryBoy && deliveryBoy.isBlocked && deliveryBoy.blockReason !== 'COD limit exceeded') {
+    if (deliveryBoy && deliveryBoy.isBlocked && (!deliveryBoy.blockReason || !deliveryBoy.blockReason.toLowerCase().includes('cod limit exceeded'))) {
       return res.status(403).json({
         success: false,
         message: `Your account is blocked. Reason: ${deliveryBoy.blockReason || 'Not specified'}`,

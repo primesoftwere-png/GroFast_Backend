@@ -27,7 +27,7 @@ module.exports.toggleOnlineStatus = async (req, res) => {
     }
 
     // Check if blocked
-    if (deliveryBoy.isBlocked) {
+    if (deliveryBoy.isBlocked && isOnline) {
       const isCodBlock = deliveryBoy.blockReason && deliveryBoy.blockReason.toLowerCase().includes('cod limit exceeded');
       if (isCodBlock) {
         // Auto-unblock check
@@ -72,14 +72,16 @@ module.exports.toggleOnlineStatus = async (req, res) => {
     // }
 
     // Check wallet limit
-    const wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId });
-    if (wallet && !wallet.isWithinLimit()) {
-      return res.status(403).json({
-        success: false,
-        message: `Cannot go online. COD limit exceeded. Current balance: ₹${wallet.balance}, Limit: ₹${wallet.codLimit}. Please settle your dues.`,
-        walletBalance: wallet.balance,
-        codLimit: wallet.codLimit
-      });
+    if (isOnline) {
+      const wallet = await DeliveryBoyWallet.findOne({ deliveryBoyId });
+      if (wallet && !wallet.isWithinLimit()) {
+        return res.status(403).json({
+          success: false,
+          message: `Cannot go online. COD limit exceeded. Current balance: ₹${wallet.balance}, Limit: ₹${wallet.codLimit}. Please settle your dues.`,
+          walletBalance: wallet.balance,
+          codLimit: wallet.codLimit
+        });
+      }
     }
 
     // Update online status
