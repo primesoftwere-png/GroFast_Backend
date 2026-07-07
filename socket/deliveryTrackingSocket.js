@@ -199,7 +199,10 @@ function initializeDeliveryTrackingSocket(io) {
             socket.emit('delivery:live-location', {
               orderId,
               deliveryBoyId,
-              ...loc
+              ...loc,
+              lat: loc.lat || loc.latitude,
+              lng: loc.lng || loc.longitude,
+              timestamp: loc.timestamp || loc.updatedAt
             });
           }
         }

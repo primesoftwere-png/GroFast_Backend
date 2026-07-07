@@ -105,7 +105,7 @@ class CacheService {
       }
     }
     
-    // Fallback to In-Memory Map
+    // Always save to In-Memory Map for redundancy
     this.memoryCache.set(key, {
       value: stringValue,
       expiresAt: Date.now() + (ttlSeconds * 1000)
@@ -129,9 +129,9 @@ class CacheService {
     if (this.isRedisConnected && this.redisClient) {
       try {
         const val = await this.redisClient.get(key);
-        return val ? JSON.parse(val) : null;
+        if (val) return JSON.parse(val);
       } catch (err) {
-        // Fallback
+        // Fallback to memory cache below
       }
     }
     

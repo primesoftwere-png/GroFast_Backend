@@ -68,7 +68,20 @@ module.exports.updateLocation = async (req, res) => {
     await cacheService.setEx(`location:${deliveryBoyId}`, 3600, locationData);
 
     // Also broadcast over socket if possible, though usually the mobile app will emit location:update socket event directly.
-
+    const io = req.app.get('io');
+    if (io && deliveryBoy.activeOrderId) {
+      const roomName = `order:${deliveryBoy.activeOrderId}`;
+      io.to(roomName).emit('delivery:live-location', {
+        orderId: deliveryBoy.activeOrderId.toString(),
+        deliveryBoyId: deliveryBoyId.toString(),
+        lat: lat,
+        lng: lng,
+        speed: speed ? parseFloat(speed) : null,
+        heading: heading ? parseFloat(heading) : null,
+        accuracy: accuracy ? parseFloat(accuracy) : null,
+        timestamp: locationData.updatedAt
+      });
+    }
     return res.status(200).json({
       success: true,
       message: "Location updated successfully",
