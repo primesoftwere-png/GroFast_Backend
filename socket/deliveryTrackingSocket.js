@@ -102,6 +102,39 @@ function initializeDeliveryTrackingSocket(io) {
         const locData = { lat, lng, speed, heading, accuracy, timestamp: timestamp || Date.now() };
         await cacheService.setEx(`location:${userId}`, 3600, locData); // Cache for 1 hour
 
+        // Log location to database every 5 sec as requested
+        try {
+          await DeliveryBoyLocation.findOneAndUpdate(
+            { deliveryBoyId: userId },
+            {
+              $set: {
+                latitude: lat,
+                longitude: lng,
+                speed: speed || null,
+                heading: heading || null,
+                accuracy: accuracy || null,
+                updatedAt: Date.now(),
+                location: {
+                  type: 'Point',
+                  coordinates: [lng, lat]
+                },
+                isActive: true,
+                orderId: orderId
+              },
+              $push: {
+                locationHistory: {
+                  $each: [{ latitude: lat, longitude: lng, speed: speed, heading: heading, timestamp: Date.now() }],
+                  $slice: -100 // Keep last 100 entries
+                }
+              }
+            },
+            { upsert: true, new: true }
+          );
+          console.log(`✅ [DB WRITE] Logged location for Driver ${userId} in MongoDB`);
+        } catch (dbErr) {
+          console.error('Error logging location to MongoDB:', dbErr.message);
+        }
+
         const broadcastPayload = {
           orderId,
           deliveryBoyId: userId,
