@@ -904,6 +904,65 @@ function initializeOrderFlowSocket(io) {
           if (order.customerId) {
             io.to(order.customerId.toString()).emit('tracking-status', statusPayload);
           }
+
+          // Fetch coordinates from Redis/DB every 5 sec and send to customer panel
+          if (order.deliveryBoyId) {
+            const dbUserId = order.deliveryBoyId._id || order.deliveryBoyId;
+            let locData = await cacheService.get(`location:${dbUserId}`);
+            
+            if (!locData) {
+              const loc = await DeliveryBoyLocation.findOne({ deliveryBoyId: dbUserId });
+              if (loc) {
+                locData = {
+                  lat: loc.latitude,
+                  lng: loc.longitude,
+                  heading: loc.heading,
+                  speed: loc.speed,
+                  timestamp: loc.updatedAt
+                };
+              }
+            } else {
+               locData = {
+                 lat: locData.lat || locData.latitude,
+                 lng: locData.lng || locData.longitude,
+                 heading: locData.heading,
+                 speed: locData.speed,
+                 timestamp: locData.timestamp || locData.updatedAt
+               };
+            }
+
+            if (locData) {
+              const locPayload = {
+                orderId: order._id,
+                orderToken: order.orderToken,
+                orderNumber: order.orderNumber,
+                lat: locData.lat,
+                lng: locData.lng,
+                speed: locData.speed,
+                heading: locData.heading,
+                timestamp: locData.timestamp
+              };
+
+              io.to(`tracking_${order.orderToken}`).emit('live-location', locPayload);
+              io.to(`tracking_${order.orderToken}`).emit('delivery:live-location', locPayload);
+              
+              if (order.orderNumber) {
+                io.to(`tracking_${order.orderNumber}`).emit('live-location', locPayload);
+                io.to(`tracking_${order.orderNumber}`).emit('delivery:live-location', locPayload);
+              }
+              
+              io.to(`order_${order._id}`).emit('live-location', locPayload);
+              io.to(`order_${order._id}`).emit('delivery:live-location', locPayload);
+              
+              io.to(`order:${order._id}`).emit('live-location', locPayload);
+              io.to(`order:${order._id}`).emit('delivery:live-location', locPayload);
+              
+              if (order.customerId) {
+                io.to(order.customerId.toString()).emit('live-location', locPayload);
+                io.to(order.customerId.toString()).emit('delivery:live-location', locPayload);
+              }
+            }
+          }
         }
       }
     } catch (error) {
