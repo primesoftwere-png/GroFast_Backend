@@ -662,7 +662,7 @@ function initializeOrderFlowSocket(io) {
 
     /**
      * Live location updates from delivery boy
-     * Emits to: Customer (live-location)
+     * Emits to: Customer (live-location & delivery:live-location)
      */
     socket.on('location-update', async ({ orderId, lat, lng, speed, heading, accuracy }) => {
       try {
@@ -670,6 +670,16 @@ function initializeOrderFlowSocket(io) {
         if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
           return;
         }
+
+        let activeOrderId = orderId;
+        if (!activeOrderId) {
+            const dbProfile = await DeliveryBoy.findOne({ userId });
+            if (dbProfile && dbProfile.activeOrderId) {
+                activeOrderId = dbProfile.activeOrderId.toString();
+            }
+        }
+        
+        if (!activeOrderId) return; // Cannot update if no order is found
 
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lng);
@@ -680,7 +690,7 @@ function initializeOrderFlowSocket(io) {
           {
             $set: {
               deliveryBoyId: userId,
-              orderId: orderId,
+              orderId: activeOrderId,
               latitude: latitude,
               longitude: longitude,
               location: { type: 'Point', coordinates: [longitude, latitude] },
@@ -692,11 +702,8 @@ function initializeOrderFlowSocket(io) {
             },
             $push: {
               locationHistory: {
-                latitude: latitude,
-                longitude: longitude,
-                speed: speed ? parseFloat(speed) : null,
-                heading: heading ? parseFloat(heading) : null,
-                timestamp: new Date()
+                $each: [{ latitude: latitude, longitude: longitude, speed: speed ? parseFloat(speed) : null, heading: heading ? parseFloat(heading) : null, timestamp: new Date() }],
+                $slice: -100
               }
             }
           },
@@ -704,23 +711,10 @@ function initializeOrderFlowSocket(io) {
         );
 
         // Get order to find customer
-        const order = await Order.findById(orderId);
-        if (order && order.customerId) {
-          // Emit live location to customer
-          io.to(order.customerId.toString()).emit('live-location', {
-            orderId: orderId,
-            orderNumber: order.orderNumber,
-            lat: latitude,
-            lng: longitude,
-            speed: speed,
-            heading: heading,
-            accuracy: accuracy,
-            timestamp: new Date()
-          });
-
-          // Emit to tracking room
-          io.to(`tracking_${order.orderToken}`).emit('live-location', {
-            orderId: orderId,
+        const order = await Order.findById(activeOrderId);
+        if (order) {
+          const locPayload = {
+            orderId: activeOrderId,
             orderToken: order.orderToken,
             orderNumber: order.orderNumber,
             lat: latitude,
@@ -729,7 +723,23 @@ function initializeOrderFlowSocket(io) {
             heading: heading,
             accuracy: accuracy,
             timestamp: new Date()
-          });
+          };
+
+          if (order.customerId) {
+            // Emit live location to customer
+            io.to(order.customerId.toString()).emit('live-location', locPayload);
+            io.to(order.customerId.toString()).emit('delivery:live-location', locPayload);
+          }
+
+          if (order.orderToken) {
+            // Emit to tracking room
+            io.to(`tracking_${order.orderToken}`).emit('live-location', locPayload);
+            io.to(`tracking_${order.orderToken}`).emit('delivery:live-location', locPayload);
+          }
+          
+          // Emit to order specific room
+          io.to(`order:${activeOrderId}`).emit('live-location', locPayload);
+          io.to(`order:${activeOrderId}`).emit('delivery:live-location', locPayload);
         }
 
       } catch (error) {

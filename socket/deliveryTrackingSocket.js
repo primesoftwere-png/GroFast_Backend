@@ -90,16 +90,24 @@ function initializeDeliveryTrackingSocket(io) {
            return;
         }
         
-        const { orderId, lat, lng, speed, heading, accuracy, timestamp } = payload;
+        let { orderId, lat, lng, speed, heading, accuracy, timestamp } = payload;
+        
+        // Fallback to activeOrderId if orderId is not provided by the frontend
+        if (!orderId) {
+            const dbProfile = await require('../models/DeliveryBoy/DeliveryBoy').findOne({ userId: userId });
+            if (dbProfile && dbProfile.activeOrderId) {
+                orderId = dbProfile.activeOrderId.toString();
+            }
+        }
         
         if (!orderId || !lat || !lng) {
            console.log(`❌ Rejected: Missing orderId, lat, or lng`);
            return socket.emit('location:error', { message: 'Missing required location data' });
         }
 
-        console.log(`✅ [CACHE WRITE] Saving location for Driver ${userId} -> Lat: ${lat}, Lng: ${lng}`);
+        console.log(`✅ [CACHE WRITE] Saving location for Driver ${userId} -> Lat: ${lat}, Lng: ${lng}, Order: ${orderId}`);
         // Fast cache in Redis/Memory
-        const locData = { lat, lng, speed, heading, accuracy, timestamp: timestamp || Date.now() };
+        const locData = { lat, lng, speed, heading, accuracy, timestamp: timestamp || Date.now(), orderId: orderId };
         await cacheService.setEx(`location:${userId}`, 3600, locData); // Cache for 1 hour
 
         // Log location to database every 5 sec as requested

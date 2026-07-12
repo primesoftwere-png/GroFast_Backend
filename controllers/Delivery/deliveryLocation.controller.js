@@ -67,6 +67,38 @@ module.exports.updateLocation = async (req, res) => {
     // Cache the location in Redis (or in-memory fallback) for 1 hour
     await cacheService.setEx(`location:${deliveryBoyId}`, 3600, locationData);
 
+    try {
+      const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
+      await DeliveryBoyLocation.findOneAndUpdate(
+        { deliveryBoyId: deliveryBoyId },
+        {
+          $set: {
+            latitude: lat,
+            longitude: lng,
+            speed: speed ? parseFloat(speed) : null,
+            heading: heading ? parseFloat(heading) : null,
+            accuracy: accuracy ? parseFloat(accuracy) : null,
+            updatedAt: Date.now(),
+            location: {
+              type: 'Point',
+              coordinates: [lng, lat]
+            },
+            isActive: deliveryBoy.activeOrderId ? true : false,
+            orderId: deliveryBoy.activeOrderId || null
+          },
+          $push: {
+            locationHistory: {
+              $each: [{ latitude: lat, longitude: lng, speed: speed ? parseFloat(speed) : null, heading: heading ? parseFloat(heading) : null, timestamp: Date.now() }],
+              $slice: -100 // Keep last 100 entries
+            }
+          }
+        },
+        { upsert: true, new: true }
+      );
+    } catch (dbErr) {
+      console.error('Error logging location to MongoDB:', dbErr.message);
+    }
+
     // Also broadcast over socket if possible, though usually the mobile app will emit location:update socket event directly.
     const io = req.app.get('io');
     if (io && deliveryBoy.activeOrderId) {

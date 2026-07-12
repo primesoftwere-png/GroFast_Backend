@@ -312,9 +312,9 @@ module.exports.pickupOrder = async (req, res) => {
           message: 'Customer will share this OTP with you to confirm delivery'
         },
         deliveryLocation: {
-          address: order.deliveryAddress?.address,
-          lat: order.deliveryAddress?.lat,
-          lng: order.deliveryAddress?.lng
+          address: order.deliveryAddressId ? (order.deliveryAddressId.addressLine1 + (order.deliveryAddressId.addressLine2 ? ', ' + order.deliveryAddressId.addressLine2 : '')) : null,
+          lat: order.deliveryAddressId ? (order.deliveryAddressId.latitude || order.deliveryAddressId.lat || order.deliveryAddressId.lan) : null,
+          lng: order.deliveryAddressId ? (order.deliveryAddressId.longitude || order.deliveryAddressId.lng) : null
         },
         customer: {
           name: order.customerId?.fullname,
@@ -624,6 +624,19 @@ module.exports.getOrderDetails = async (req, res) => {
         shopAddress: shopDetails.shopAddress,
         shopName: shopDetails.shopName
       };
+    }
+
+    // Explicitly add deliveryLocation for the map
+    if (orderObj.deliveryAddressId) {
+      orderObj.deliveryLocation = {
+        address: orderObj.deliveryAddressId.addressLine1 + (orderObj.deliveryAddressId.addressLine2 ? ', ' + orderObj.deliveryAddressId.addressLine2 : ''),
+        lat: orderObj.deliveryAddressId.latitude || orderObj.deliveryAddressId.lat || orderObj.deliveryAddressId.lan,
+        lng: orderObj.deliveryAddressId.longitude || orderObj.deliveryAddressId.lng
+      };
+      
+      // Also map it at root level if frontend expects it there
+      orderObj.lat = orderObj.deliveryLocation.lat;
+      orderObj.lng = orderObj.deliveryLocation.lng;
     }
 
     return res.status(200).json({
