@@ -137,7 +137,7 @@ function initializeOrderFlowSocket(io) {
       console.log(`✅ Delivery boy joined delivery-room`);
       
       // Mark as online
-      markDeliveryBoyOnline(userId);
+      // markDeliveryBoyOnline(userId); // Removed to prevent race condition on page refresh
     }
     
     console.log('========================================\n');
@@ -847,7 +847,7 @@ function initializeOrderFlowSocket(io) {
       
       // Mark delivery boy as offline
       if (role === 'deliveryBoy') {
-        await markDeliveryBoyOffline(userId);
+        // await markDeliveryBoyOffline(userId); // Removed to prevent race condition on page refresh
       }
     });
 

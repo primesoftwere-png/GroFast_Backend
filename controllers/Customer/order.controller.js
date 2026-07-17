@@ -294,10 +294,9 @@ module.exports.createOrder = async (req, res) => {
           items: formattedItems
         };
         
-        shopTarget.roomIds.forEach(roomId => {
-          io.to(roomId).emit('new-order', orderEventPayload);
-          io.to(roomId).emit('receiveOrderRequest', orderEventPayload);
-        });
+        // Emit to shopkeeper rooms using array to avoid duplicate events for users in multiple rooms
+        io.to(shopTarget.roomIds).emit('new-order', orderEventPayload);
+        io.to(shopTarget.roomIds).emit('receiveOrderRequest', orderEventPayload);
         
         console.log(`\n========================================`);
         console.log(`🚀 SOCKET.IO EMISSION DETAILS`);

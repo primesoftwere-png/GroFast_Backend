@@ -7,12 +7,10 @@ module.exports = (io, socket) => {
     console.log("Order request received:", orderData);
 
     // Optional: save to DB here
-    // Emit to specific shopkeeper room/socket
-    orderData.shopkeeperId.forEach((element) => {
-      console.log("Emitting to shopkeeper:", element);
-      const result = io.to(element).emit("receiveOrderRequest", orderData);
-      console.log("Emit result:", result);
-    });
+    // Emit to specific shopkeeper room/socket using array to avoid duplicates
+    console.log("Emitting to shopkeeper rooms:", orderData.shopkeeperId);
+    // const result = io.to(orderData.shopkeeperId).emit("receiveOrderRequest", orderData);
+    // console.log("Emit result:", result);
   });
 
   // Enhanced reject order - send message to customer

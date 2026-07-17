@@ -8,7 +8,7 @@ const ShopkeeperWallet = require('../../models/ShopKeeper/ShopkeeperWallet');
 const DeliveryBoy = require('../../models/DeliveryBoy/DeliveryBoy');
 const Notification = require('../../models/Customer/Notification');
 const { emitDeliveryRequestToNearbyDeliveryBoys } = require('../../socket/orderFlowSocket');
-
+const DeliveryBoyLocation = require('../../models/DeliveryBoy/DeliveryBoyLocation');
 const getOrderItemsForResponse = async (order) => {
   const orderItems = await OrderItem.find({ orderId: order._id })
     .populate('productId', 'productName productImage productPrice');
@@ -489,29 +489,41 @@ module.exports.acceptOrder = async (req, res) => {
         if (nearbyDeliveryBoys.length > 0) {
           const deliveryBoyIds = nearbyDeliveryBoys.map(db => db.userId.toString());
           
-          emitDeliveryRequestToNearbyDeliveryBoys(io, deliveryBoyIds, {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            orderToken: order.orderToken,
-            pickupLocation: {
-              shopName: shop.shopName,
-              address: shop.address,
-              lat: shop.location?.coordinates?.[1] || 0,
-              lng: shop.location?.coordinates?.[0] || 0
-            },
-            deliveryLocation: {
-              address: order.deliveryAddress?.address || 'Customer Address',
-              lat: order.deliveryAddress?.lat || 0,
-              lng: order.deliveryAddress?.lng || 0
-            },
-            distance: '2.5 km', // Calculate actual distance
-            estimatedEarnings: 50, // Calculate based on distance
-            expiresIn: 60 // 60 seconds to accept
+          // Emit order-available to align with frontend expectations
+          deliveryBoyIds.forEach(id => {
+            io.to(id).emit('order-available', {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              shopId: order.shopId._id,
+              shopName: order.shopId.shopName || order.shopId.fullname,
+              shopPhone: order.shopId.phone,
+              customerName: order.customerId.fullname,
+              totalAmount: order.totalAmount,
+              deliveryCharge: order.deliveryCharge,
+              paymentMethod: order.paymentMethod,
+              status: 'CONFIRMED',
+              distance: '2.5 km', // Placeholder, could use actual distance
+              createdAt: order.createdAt
+            });
           });
 
-          console.log(`✓ Delivery requests sent to ${nearbyDeliveryBoys.length} nearby delivery boys`);
+          console.log(`✓ Delivery requests (order-available) sent to ${nearbyDeliveryBoys.length} nearby delivery boys`);
         } else {
-          console.log('⚠ No nearby delivery boys found');
+          console.log('⚠ No nearby delivery boys found. Broadcasting to all delivery boys.');
+          // Fallback: Broadcast to all delivery boys
+          io.to('delivery-room').emit('order-available', {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            shopId: order.shopId._id,
+            shopName: order.shopId.shopName || order.shopId.fullname,
+            shopPhone: order.shopId.phone,
+            customerName: order.customerId.fullname,
+            totalAmount: order.totalAmount,
+            deliveryCharge: order.deliveryCharge,
+            paymentMethod: order.paymentMethod,
+            status: 'CONFIRMED',
+            createdAt: order.createdAt
+          });
         }
       } catch (error) {
         console.error('Error finding nearby delivery boys:', error);

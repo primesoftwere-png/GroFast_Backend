@@ -7,7 +7,13 @@ const DeliveryBoyWallet = require("../../models/DeliveryBoy/DeliveryBoyWallet");
 module.exports.toggleOnlineStatus = async (req, res) => {
   try {
     const deliveryBoyId = req.user._id;
-    const { isOnline } = req.body;
+    let { isOnline } = req.body;
+
+    // Convert string to boolean if passed as string
+    if (typeof isOnline === 'string') {
+      if (isOnline.toLowerCase() === 'true') isOnline = true;
+      else if (isOnline.toLowerCase() === 'false') isOnline = false;
+    }
 
     // Validation
     if (typeof isOnline !== 'boolean') {
@@ -100,6 +106,15 @@ module.exports.toggleOnlineStatus = async (req, res) => {
 
     await deliveryBoy.save();
 
+    // Emit socket event for real-time order flow
+    const io = req.app ? req.app.get('io') : global.io;
+    if (io) {
+      io.to(deliveryBoyId.toString()).emit('online-status', {
+        isOnline: deliveryBoy.isOnline,
+        isAvailable: deliveryBoy.isAvailable
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: `Status updated to ${isOnline ? 'online' : 'offline'}`,
@@ -163,20 +178,7 @@ module.exports.getCurrentStatus = async (req, res) => {
       success: true,
       message: "Status retrieved successfully",
       data: {
-        isOnline: deliveryBoy.isOnline,
-        isAvailable: deliveryBoy.isAvailable,
-        isBlocked: deliveryBoy.isBlocked,
-        blockReason: deliveryBoy.blockReason,
-        kycStatus: kycStatus,
-        activeOrder: deliveryBoy.activeOrderId,
-        wallet: {
-          balance: wallet ? wallet.balance : 0,
-          codLimit: wallet ? wallet.codLimit : 10000,
-          isWithinLimit: wallet ? wallet.isWithinLimit() : true
-        },
-        canGoOnline: !deliveryBoy.isBlocked && 
-                     kycStatus === 'approved' && 
-                     (wallet ? wallet.isWithinLimit() : true)
+        isOnline: deliveryBoy.isOnline
       }
     });
 
