@@ -191,17 +191,16 @@ module.exports.createOrder = async (req, res) => {
       });
     }
 
-    const createdOrders = [];
     const io = req.app.get('io');
 
-    // Create an order for each shop
-    for (let orderData of ordersToCreate) {
+    // Create orders in parallel
+    const orderPromises = ordersToCreate.map(async (orderData) => {
       // Verify shop exists
       const shopTarget = await resolveShopkeeperTarget(orderData.shopId);
       const shop = shopTarget?.user;
       if (!shop || (shop.role !== 'admin' && shop.role !== 'superadmin')) {
         console.warn(`Invalid or missing shop ${orderData.shopId}, skipping order for these items.`);
-        continue;
+        return null;
       }
       const normalizedShopId = shopTarget.userId;
 
@@ -252,127 +251,138 @@ module.exports.createOrder = async (req, res) => {
         }
       }
 
-      // Populate order details for socket emission
-      const populatedOrder = await Order.findById(order._id)
-        .populate('customerId', 'fullname phone email')
-        .populate('shopId', 'fullname phone email shopName address')
-        .populate('deliveryAddressId');
+      // Run heavy populate, socket emission, and notification in the background
+      // without blocking the main API response.
+      (async () => {
+        try {
+          // Populate order details for socket emission
+          const populatedOrder = await Order.findById(order._id)
+            .populate('customerId', 'fullname phone email')
+            .populate('shopId', 'fullname phone email shopName address')
+            .populate('deliveryAddressId');
 
-      console.log(`\n✓ ORDER CREATED: ${order.orderNumber}`);
-      console.log(`Customer: ${populatedOrder.customerId.fullname}`);
-      console.log(`Shop: ${populatedOrder.shopId.shopName || populatedOrder.shopId.fullname}`);
-      console.log(`Total: ₹${order.totalAmount}`);
+          console.log(`\n✓ ORDER CREATED: ${order.orderNumber}`);
+          console.log(`Customer: ${populatedOrder.customerId.fullname}`);
+          console.log(`Shop: ${populatedOrder.shopId.shopName || populatedOrder.shopId.fullname}`);
+          console.log(`Total: ₹${order.totalAmount}`);
 
-      // Get populated items to match getOrders structure for frontend
-      let formattedItems = [];
-      try {
-        const orderItems = await OrderItem.find({ orderId: order._id })
-          .populate('productId', 'productName productImage productPrice');
-          
-        if (orderItems && orderItems.length > 0) {
-          formattedItems = orderItems;
-        } else {
-          formattedItems = (order.items || []).map((item) => ({
-            _id: item._id,
-            orderId: order._id,
-            productId: item.productId,
-            productName: item.productName,
-            quantity: item.quantity,
-            unitPrice: item.price,
-            totalPrice: item.totalPrice
-          }));
+          // Get populated items to match getOrders structure for frontend
+          let formattedItems = [];
+          try {
+            const orderItems = await OrderItem.find({ orderId: order._id })
+              .populate('productId', 'productName productImage productPrice');
+              
+            if (orderItems && orderItems.length > 0) {
+              formattedItems = orderItems;
+            } else {
+              formattedItems = (order.items || []).map((item) => ({
+                _id: item._id,
+                orderId: order._id,
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                totalPrice: item.totalPrice
+              }));
+            }
+          } catch (err) {
+            console.error('Error fetching order items for socket payload:', err.message);
+            formattedItems = order.items || [];
+          }
+
+          // Emit to shopkeeper via Socket.IO
+          if (io) {
+            const orderEventPayload = {
+              ...populatedOrder.toObject(),
+              items: formattedItems
+            };
+            
+            // Emit to shopkeeper rooms using array to avoid duplicate events for users in multiple rooms
+            io.to(shopTarget.roomIds).emit('new-order', orderEventPayload);
+            io.to(shopTarget.roomIds).emit('receiveOrderRequest', orderEventPayload);
+            
+            console.log(`\n========================================`);
+            console.log(`🚀 SOCKET.IO EMISSION DETAILS`);
+            console.log(`========================================`);
+            console.log(`Event: 'new-order' and 'receiveOrderRequest'`);
+            console.log(`Target Shop ID (Original): ${orderData.shopId}`);
+            console.log(`Target Socket Rooms (Shopkeeper IDs):`, shopTarget.roomIds);
+            console.log(`Order ID: ${order._id}`);
+            console.log(`========================================\n`);
+          }
+
+          // 🔔 Save persistent notification for shopkeeper in database
+          try {
+            const itemsSummary = order.items.map(i => `${i.productName} x${i.quantity}`).join(', ');
+            const notificationTitle = `🛒 New Order #${order.orderNumber}`;
+            const notificationBody = `New order from ${populatedOrder.customerId.fullname} - ${itemsSummary} | Total: ₹${order.totalAmount} | Payment: ${order.paymentMethod}`;
+
+            const savedNotification = await Notification.create({
+              userId: normalizedShopId,
+              notificationType: 'order',
+              title: notificationTitle,
+              body: notificationBody,
+              dataJson: JSON.stringify({
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                orderToken: order.orderToken,
+                customerName: populatedOrder.customerId.fullname,
+                customerPhone: populatedOrder.customerId.phone,
+                totalAmount: order.totalAmount,
+                paymentMethod: order.paymentMethod,
+                itemsCount: order.items.length,
+                status: 'PENDING'
+              }),
+              isRead: false
+            });
+
+            console.log(`✓ Notification saved for shopkeeper: ${orderData.shopId}`);
+
+            // Emit real-time notification event to shopkeeper's notification panel
+            if (io) {
+              io.to(shopTarget.roomIds).emit('notification', {
+                _id: savedNotification._id,
+                notificationType: 'order',
+                title: notificationTitle,
+                body: notificationBody,
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                orderToken: order.orderToken,
+                customerName: populatedOrder.customerId.fullname,
+                totalAmount: order.totalAmount,
+                paymentMethod: order.paymentMethod,
+                isRead: false,
+                timestamp: new Date()
+              });
+              console.log(`✓ Emitted notification event to shopkeeper: ${orderData.shopId}`);
+            }
+          } catch (notifError) {
+            // Don't fail the order creation if notification saving fails
+            console.error(`⚠ Failed to save notification for shopkeeper ${orderData.shopId}:`, notifError.message);
+          }
+
+          if (io) {
+            const orderStatusPayload = {
+               orderId: order._id,
+               orderToken: order.orderToken,
+               orderNumber: order.orderNumber,
+               status: order.orderStatus,
+               message: 'Order placed successfully',
+               timestamp: new Date()
+            };
+            io.to(userId.toString()).emit('order-status', orderStatusPayload);
+            io.to(`tracking_${order.orderToken}`).emit('order-status', orderStatusPayload);
+          }
+        } catch (backgroundErr) {
+          console.error("Background socket/notification error in createOrder:", backgroundErr);
         }
-      } catch (err) {
-        console.error('Error fetching order items for socket payload:', err.message);
-        formattedItems = order.items || [];
-      }
+      })();
 
-      // Emit to shopkeeper via Socket.IO
-      if (io) {
-        const orderEventPayload = {
-          ...populatedOrder.toObject(),
-          items: formattedItems
-        };
-        
-        // Emit to shopkeeper rooms using array to avoid duplicate events for users in multiple rooms
-        io.to(shopTarget.roomIds).emit('new-order', orderEventPayload);
-        io.to(shopTarget.roomIds).emit('receiveOrderRequest', orderEventPayload);
-        
-        console.log(`\n========================================`);
-        console.log(`🚀 SOCKET.IO EMISSION DETAILS`);
-        console.log(`========================================`);
-        console.log(`Event: 'new-order' and 'receiveOrderRequest'`);
-        console.log(`Target Shop ID (Original): ${orderData.shopId}`);
-        console.log(`Target Socket Rooms (Shopkeeper IDs):`, shopTarget.roomIds);
-        console.log(`Order ID: ${order._id}`);
-        console.log(`========================================\n`);
-      }
+      return order;
+    });
 
-      // 🔔 Save persistent notification for shopkeeper in database
-      try {
-        const itemsSummary = order.items.map(i => `${i.productName} x${i.quantity}`).join(', ');
-        const notificationTitle = `🛒 New Order #${order.orderNumber}`;
-        const notificationBody = `New order from ${populatedOrder.customerId.fullname} - ${itemsSummary} | Total: ₹${order.totalAmount} | Payment: ${order.paymentMethod}`;
-
-        const savedNotification = await Notification.create({
-          userId: normalizedShopId,
-          notificationType: 'order',
-          title: notificationTitle,
-          body: notificationBody,
-          dataJson: JSON.stringify({
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            orderToken: order.orderToken,
-            customerName: populatedOrder.customerId.fullname,
-            customerPhone: populatedOrder.customerId.phone,
-            totalAmount: order.totalAmount,
-            paymentMethod: order.paymentMethod,
-            itemsCount: order.items.length,
-            status: 'PENDING'
-          }),
-          isRead: false
-        });
-
-        console.log(`✓ Notification saved for shopkeeper: ${orderData.shopId}`);
-
-        // Emit real-time notification event to shopkeeper's notification panel
-        if (io) {
-          io.to(shopTarget.roomIds).emit('notification', {
-            _id: savedNotification._id,
-            notificationType: 'order',
-            title: notificationTitle,
-            body: notificationBody,
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            orderToken: order.orderToken,
-            customerName: populatedOrder.customerId.fullname,
-            totalAmount: order.totalAmount,
-            paymentMethod: order.paymentMethod,
-            isRead: false,
-            timestamp: new Date()
-          });
-          console.log(`✓ Emitted notification event to shopkeeper: ${orderData.shopId}`);
-        }
-      } catch (notifError) {
-        // Don't fail the order creation if notification saving fails
-        console.error(`⚠ Failed to save notification for shopkeeper ${orderData.shopId}:`, notifError.message);
-      }
-
-      if (io) {
-        const orderStatusPayload = {
-           orderId: order._id,
-           orderToken: order.orderToken,
-           orderNumber: order.orderNumber,
-           status: order.orderStatus,
-           message: 'Order placed successfully',
-           timestamp: new Date()
-        };
-        io.to(userId.toString()).emit('order-status', orderStatusPayload);
-        io.to(`tracking_${order.orderToken}`).emit('order-status', orderStatusPayload);
-      }
-
-      createdOrders.push(order);
-    }
+    const results = await Promise.all(orderPromises);
+    const createdOrders = results.filter(order => order !== null);
 
     if (createdOrders.length === 0) {
       return res.status(400).json({
