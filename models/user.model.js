@@ -7,6 +7,10 @@ const bcrypt = require("bcrypt");
 
 const userSchema = new mongoose.Schema(
   {
+    profileImage: {
+      type: String,
+      default: "",
+    },
     fullname: {
       type: String,
       required: true,

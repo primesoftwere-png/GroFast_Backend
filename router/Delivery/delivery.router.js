@@ -6,6 +6,7 @@ const deliveryKYCController = require('../../controllers/Delivery/deliveryKYC.co
 const deliveryOrderController = require('../../controllers/Delivery/deliveryOrderManagement.controller');
 const authMiddleware = require('../../middlewere/user.middlewere');
 const { authorizeRoles } = require('../../middlewere/role.middleware');
+const upload = require('../../middlewere/uploadMiddleware');
 
 // Middleware to protect all delivery routes
 const protectDeliveryRoutes = [
@@ -24,7 +25,7 @@ router.post('/auth/logout', protectDeliveryRoutes, deliveryController.logoutDeli
 
 // ==================== PROFILE & KYC ROUTES ====================
 router.get('/profile', protectDeliveryRoutes, deliveryController.getProfile);
-router.put('/profile', protectDeliveryRoutes, deliveryController.updateProfile);
+router.put('/profile', protectDeliveryRoutes, upload.single('profileImage'), deliveryController.updateProfile);
 
 // KYC Routes (New)
 router.post('/kyc/submit', protectDeliveryRoutes, deliveryKYCController.submitKYC);

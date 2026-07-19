@@ -293,11 +293,16 @@ module.exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
     const { fullname, phone, email } = req.body;
+    let profileImage = req.body.profileImage;
+    if (req.file) {
+      profileImage = "uploads/" + req.file.filename;
+    }
 
     const updateData = {};
     if (fullname) updateData.fullname = fullname.trim();
     if (phone) updateData.phone = phone.trim();
     if (email) updateData.email = email.toLowerCase().trim();
+    if (profileImage !== undefined) updateData.profileImage = profileImage;
 
     const user = await User.findByIdAndUpdate(
       userId,

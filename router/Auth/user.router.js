@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../../controllers/Auth/user.controller");
 const authMiddleware = require("../../middlewere/user.middlewere");
+const upload = require("../../middlewere/uploadMiddleware");
 
 router.post("/register", userController.register);
 router.post("/login", userController.login);
@@ -13,6 +14,9 @@ router.put(
   userController.updateAddress
 );
 router.get("/profile", authMiddleware.userMiddlewere, userController.profile);
+router.put("/update-profile", authMiddleware.userMiddlewere, upload.single('profileImage'), userController.updateProfile);
+router.put("/profile/avatar", authMiddleware.userMiddlewere, upload.single('avatar'), userController.updateAvatar);
+router.post("/profile/avatar", authMiddleware.userMiddlewere, upload.single('avatar'), userController.updateAvatar);
 router.get("/logout", authMiddleware.userMiddlewere, userController.logout);
 
 // Google Auth & OTP Login

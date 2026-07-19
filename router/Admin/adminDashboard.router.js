@@ -8,6 +8,7 @@ const notificationController = require('../../controllers/Admin/adminNotificatio
 const authController = require('../../controllers/Admin/adminAuth.controller');
 const authMiddleware = require('../../middlewere/user.middlewere');
 const roleMiddleware = require('../../middlewere/role.middleware');
+const upload = require('../../middlewere/uploadMiddleware');
 
 // ==================== AUTHENTICATION APIs ====================
 // POST /api/admin/login - SuperAdmin login
@@ -30,6 +31,7 @@ router.get('/profile',
 router.patch('/profile', 
   authMiddleware.userMiddlewere, 
   roleMiddleware.isSuperAdmin,
+  upload.single('profileImage'),
   authController.updateProfile
 );
 

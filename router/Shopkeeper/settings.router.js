@@ -7,12 +7,14 @@ const authMiddleware = require('../../middlewere/user.middlewere');
 // All routes require authentication
 router.use(authMiddleware.userMiddlewere);
 
+const upload = require('../../middlewere/uploadMiddleware');
+
 // Settings
 router.get('/settings', settingsController.getSettings);
 router.put('/settings/business-hours', settingsController.updateBusinessHours);
 router.put('/settings/location', settingsController.updateShopLocation);
 router.put('/settings/bank-details', settingsController.updateBankDetails);
-router.put('/settings/profile', settingsController.updateProfile);
+router.put('/settings/profile', upload.single("profileImage"), settingsController.updateProfile);
 router.post('/settings/change-password', settingsController.changePassword);
 
 // Wallet & Payout

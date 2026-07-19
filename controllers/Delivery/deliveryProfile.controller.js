@@ -67,9 +67,12 @@ module.exports.updateProfile = async (req, res) => {
       dateOfBirth,
       gender,
       address,
-      emergencyContact,
-      profileImage
+      emergencyContact
     } = req.body;
+    let profileImage = req.body.profileImage;
+    if (req.file) {
+      profileImage = "uploads/" + req.file.filename;
+    }
 
     // Update user details
     const userUpdateData = {};
@@ -83,6 +86,9 @@ module.exports.updateProfile = async (req, res) => {
         });
       }
       userUpdateData.phone = phone.trim();
+    }
+    if (profileImage !== undefined) {
+      userUpdateData.profileImage = profileImage;
     }
 
     if (Object.keys(userUpdateData).length > 0) {

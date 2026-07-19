@@ -418,6 +418,80 @@ module.exports.profile = async (req, res) => {
   }
 };
 
+module.exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { fullname, phone } = req.body;
+    let profileImage = req.body.profileImage;
+    
+    if (req.file) {
+      profileImage = "uploads/" + req.file.filename;
+    }
+
+    const updateData = {};
+    if (fullname) updateData.fullname = fullname.trim();
+    if (phone) updateData.phone = phone.trim();
+    if (profileImage !== undefined) updateData.profileImage = profileImage;
+
+    const user = await userModel.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select("-password -__v -resetPasswordToken -resetPasswordExpire");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
+module.exports.updateAvatar = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file provided" });
+    }
+
+    const profileImage = "uploads/" + req.file.filename;
+
+    const user = await userModel.findByIdAndUpdate(
+      userId,
+      { profileImage },
+      { new: true, runValidators: true }
+    ).select("-password -__v -resetPasswordToken -resetPasswordExpire");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Avatar updated successfully",
+      user
+    });
+  } catch (error) {
+    console.error("Update avatar error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
 module.exports.logout = async (req, res) => {
   try {
     res.clearCookie("token");

@@ -428,21 +428,9 @@ module.exports.getProfile = async (req, res) => {
       data: {
         shopkeeper: shopkeeper,
         shop: shop,
-        kyc: kyc ? {
-          status: kyc.kycStatus,
-          rejectionReason: kyc.rejectionReason
-        } : null,
-        bankDetails: bankDetails ? {
-          accountHolderName: bankDetails.accountHolderName,
-          bankAccountNumber: bankDetails.bankAccountNumber.slice(-4).padStart(bankDetails.bankAccountNumber.length, '*'),
-          ifscCode: bankDetails.ifscCode,
-          isVerified: bankDetails.isVerified
-        } : null,
-        wallet: wallet ? {
-          balance: wallet.balance,
-          pendingAmount: wallet.pendingAmount,
-          totalEarnings: wallet.totalEarnings
-        } : null
+        kyc: kyc,
+        bankDetails: bankDetails,
+        wallet: wallet
       }
     });
 
