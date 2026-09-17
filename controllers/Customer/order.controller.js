@@ -9,6 +9,7 @@ const CustomerAddress = require('../../models/Customer/CustomerAddress');
 const Notification = require('../../models/Customer/Notification');
 const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 const Shop = require('../../models/ShopKeeper/Shop');
+const Product = require('../../models/Product.model');
 const { processOrderIncomeInternal } = require('../shopkeeper/income.controller');
 const SettlementEngine = require('../../services/SettlementEngine');
 
@@ -728,6 +729,18 @@ module.exports.markDelivered = async (req, res) => {
     order.paymentStatus = 'PAID';
     await order.save();
 
+    // Decrease product stock when order is successfully delivered
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        if (item.productId && item.quantity) {
+          await Product.findByIdAndUpdate(
+            item.productId,
+            { $inc: { productQuantity: -item.quantity } }
+          );
+        }
+      }
+    }
+
     // Call Centralized Settlement Engine
     const settlementResult = await SettlementEngine.processDeliveredOrder(order._id);
     if (!settlementResult.success) {
@@ -1008,6 +1021,8 @@ module.exports.getOrderByToken = async (req, res) => {
         if (shop) {
           order.shopId = {
             ...order.shopId,
+            userId: order.shopId._id,
+            shopkeeperId: shopkeeper._id,
             shopName: shop.shopName,
             shopImage: shop.shopImage,
             shopAddress: shop.shopAddress,
@@ -1106,7 +1121,7 @@ module.exports.getCategorizedOrders = async (req, res) => {
     }
 
     const orders = await Order.find(query)
-      .populate('shopId', 'fullname shopName phone')
+      .populate('shopId', 'fullname email phone roleDetails')
       .populate('customerId', 'fullname phone email')
       .populate('deliveryBoyId', 'fullname phone')
       .populate('deliveryAddressId')

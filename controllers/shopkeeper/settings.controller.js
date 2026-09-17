@@ -172,7 +172,9 @@ module.exports.updateBankDetails = async (req, res) => {
     const userId = req.user._id;
     const {
       accountHolderName,
+      accountName,
       bankAccountNumber,
+      accountNumber,
       ifscCode,
       bankName,
       branchName,
@@ -187,23 +189,26 @@ module.exports.updateBankDetails = async (req, res) => {
       });
     }
 
+    const actualAccountHolderName = accountHolderName || accountName;
+    const actualBankAccountNumber = bankAccountNumber || accountNumber;
+
     const updateData = {};
-    if (accountHolderName) updateData.accountHolderName = accountHolderName.trim();
-    if (bankAccountNumber) updateData.bankAccountNumber = bankAccountNumber.trim();
+    if (actualAccountHolderName) updateData.accountHolderName = actualAccountHolderName.trim();
+    if (actualBankAccountNumber) updateData.bankAccountNumber = actualBankAccountNumber.trim();
     if (ifscCode) updateData.ifscCode = ifscCode.trim().toUpperCase();
     if (bankName) updateData.bankName = bankName.trim();
     if (branchName) updateData.branchName = branchName.trim();
     if (upiId) updateData.upiId = upiId.trim();
 
     // If critical details changed, mark as unverified
-    if (bankAccountNumber || ifscCode) {
+    if (actualBankAccountNumber || ifscCode) {
       updateData.isVerified = false;
     }
 
     const bankDetails = await ShopkeeperBankDetails.findOneAndUpdate(
       { shopkeeperId: shopkeeper._id },
       updateData,
-      { new: true, upsert: true }
+      { new: true, upsert: true, runValidators: true }
     );
 
     return res.status(200).json({
@@ -212,7 +217,7 @@ module.exports.updateBankDetails = async (req, res) => {
       data: {
         bankDetails: {
           accountHolderName: bankDetails.accountHolderName,
-          bankAccountNumber: bankDetails.bankAccountNumber.slice(-4).padStart(bankDetails.bankAccountNumber.length, '*'),
+          bankAccountNumber: bankDetails.bankAccountNumber ? bankDetails.bankAccountNumber.slice(-4).padStart(bankDetails.bankAccountNumber.length, '*') : '',
           ifscCode: bankDetails.ifscCode,
           bankName: bankDetails.bankName,
           upiId: bankDetails.upiId,
@@ -223,6 +228,13 @@ module.exports.updateBankDetails = async (req, res) => {
 
   } catch (error) {
     console.error('Update bank details error:', error);
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', ')
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Server error',

@@ -8,6 +8,7 @@ const DeliveryBoyWallet = require('../../models/DeliveryBoy/DeliveryBoyWallet');
 const WalletTransaction = require('../../models/DeliveryBoy/WalletTransaction');
 const Shopkeeper = require('../../models/ShopKeeper/Shopkeeper');
 const Shop = require('../../models/ShopKeeper/Shop');
+const Product = require('../../models/Product.model');
 const DeliveryBoyNotification = require('../../models/DeliveryBoy/DeliveryBoyNotification');
 const { 
   emitDeliveryBoyAssigned,
@@ -416,6 +417,18 @@ module.exports.completeDelivery = async (req, res) => {
     order.paymentStatus = order.paymentMethod === 'COD' ? 'PAID' : order.paymentStatus;
     await order.save();
 
+    // Decrease product stock when order is successfully delivered
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        if (item.productId && item.quantity) {
+          await Product.findByIdAndUpdate(
+            item.productId,
+            { $inc: { productQuantity: -item.quantity } }
+          );
+        }
+      }
+    }
+
     // Mark delivery boy as available again
     deliveryBoy.isAvailable = true;
     await deliveryBoy.save();
@@ -510,13 +523,13 @@ module.exports.getAssignedOrders = async (req, res) => {
     const query = { deliveryBoyId: userId };
     
     if (status) {
-      const validStatuses = ['ASSIGNED_TO_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+      const validStatuses = ['ASSIGNED_TO_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
       if (validStatuses.includes(status.toUpperCase())) {
         query.orderStatus = status.toUpperCase();
       }
     } else {
-      // Default: Show active orders only
-      query.orderStatus = { $in: ['ASSIGNED_TO_DELIVERY', 'OUT_FOR_DELIVERY'] };
+      // Default: Show active, completed, and cancelled orders
+      query.orderStatus = { $in: ['ASSIGNED_TO_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'] };
     }
 
     // Get orders
@@ -533,6 +546,9 @@ module.exports.getAssignedOrders = async (req, res) => {
           .populate('productId', 'productName productImage productPrice');
         
         const orderObj = order.toObject();
+        
+        // Ensure deliveryBoyAmount is present
+        orderObj.deliveryBoyAmount = orderObj.deliveryBoyAmount || orderObj.deliveryCharge || 0;
         
         // Include relevant OTPs based on status
         if (orderObj.orderStatus === 'ASSIGNED_TO_DELIVERY' && orderObj.pickupOTP) {
@@ -617,6 +633,10 @@ module.exports.getOrderDetails = async (req, res) => {
       
     // Convert order to object to append shop details
     const orderObj = order.toObject();
+    
+    // Ensure deliveryBoyAmount is present
+    orderObj.deliveryBoyAmount = orderObj.deliveryBoyAmount || orderObj.deliveryCharge || 0;
+
     if (shopDetails) {
       orderObj.shopDetails = {
         latitude: shopDetails.latitude,

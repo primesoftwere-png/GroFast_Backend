@@ -421,7 +421,7 @@ module.exports.profile = async (req, res) => {
 module.exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { fullname, phone } = req.body;
+    const { fullname, phone, email } = req.body;
     let profileImage = req.body.profileImage;
     
     if (req.file) {
@@ -431,7 +431,28 @@ module.exports.updateProfile = async (req, res) => {
     const updateData = {};
     if (fullname) updateData.fullname = fullname.trim();
     if (phone) updateData.phone = phone.trim();
+    if (email) updateData.email = email.trim().toLowerCase();
     if (profileImage !== undefined) updateData.profileImage = profileImage;
+
+    // Check if email or phone already exists for another user
+    if (email || phone) {
+      const existingUser = await userModel.findOne({
+        $or: [
+          ...(email ? [{ email: updateData.email }] : []),
+          ...(phone ? [{ phone: updateData.phone }] : [])
+        ],
+        _id: { $ne: userId }
+      });
+
+      if (existingUser) {
+        if (email && existingUser.email === updateData.email) {
+          return res.status(400).json({ success: false, message: "Email already in use" });
+        }
+        if (phone && existingUser.phone === updateData.phone) {
+          return res.status(400).json({ success: false, message: "Phone number already in use" });
+        }
+      }
+    }
 
     const user = await userModel.findByIdAndUpdate(
       userId,
@@ -450,6 +471,13 @@ module.exports.updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Update profile error:", error);
+    if (error.code === 11000) {
+       const field = Object.keys(error.keyPattern)[0];
+       return res.status(400).json({ 
+         success: false,
+         message: `User already exists with this ${field}` 
+       });
+    }
     res.status(500).json({
       success: false,
       message: "Server error",

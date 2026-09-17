@@ -5,6 +5,7 @@ const DeliveryBoyWallet = require("../../models/DeliveryBoy/DeliveryBoyWallet");
 const WalletTransaction = require("../../models/DeliveryBoy/WalletTransaction");
 const OrderOTP = require("../../models/DeliveryBoy/OrderOTP");
 const DeliveryBoyNotification = require("../../models/DeliveryBoy/DeliveryBoyNotification");
+const Product = require("../../models/Product.model");
 const SettlementEngine = require("../../services/SettlementEngine");
 
 // ✅ Mark Order as Picked Up (with OTP verification)
@@ -282,6 +283,18 @@ module.exports.completeDelivery = async (req, res) => {
     }
     
     await order.save();
+
+    // Decrease product stock when order is successfully delivered
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        if (item.productId && item.quantity) {
+          await Product.findByIdAndUpdate(
+            item.productId,
+            { $inc: { productQuantity: -item.quantity } }
+          );
+        }
+      }
+    }
 
     // Update delivery boy
     const deliveryBoy = await DeliveryBoy.findOne({ userId: deliveryBoyId });

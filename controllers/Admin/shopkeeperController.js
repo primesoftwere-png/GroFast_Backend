@@ -330,7 +330,7 @@ const registerShop = async (req, res) => {
         openingTime,
         closingTime,
         isOpen: false,
-        status: 'inactive',
+        status: 'INACTIVE',
       });
 
       const savedShop = await newShop.save();
@@ -506,7 +506,7 @@ const approveShopkeeper = async (req, res) => {
     if (approved) {
       await Shop.findOneAndUpdate(
         { shopkeeperId: shopkeeper._id },
-        { status: 'active', isOpen: true }
+        { status: 'ACTIVE', isOpen: true, isVerified: true, verifiedAt: Date.now() }
       );
       console.log(`Notification to Shopkeeper: Your shop "${shopkeeper.shopName}" has been approved (unblocked). You can now login.`);
     } else {

@@ -5,6 +5,8 @@ const Category = require('../../models/ProductCategory.model');
 const Coupon = require('../../models/Customer/Coupon');
 const User = require('../../models/user.model');
 const ShopkeeperWallet = require('../../models/ShopKeeper/ShopkeeperWallet');
+const DeliveryBoyWallet = require('../../models/DeliveryBoy/DeliveryBoyWallet');
+const GrofastWallet = require('../../models/SuperAdmin/GrofastWallet');
 const AppSettings = require('../../models/Admin/AppSettings');
 const SupportTicket = require('../../models/Admin/SupportTicket');
 
@@ -287,15 +289,76 @@ module.exports.getTransactions = async (req, res) => {
 // ==================== WALLETS ====================
 module.exports.getWallets = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const wallets = await ShopkeeperWallet.find()
-      .populate('shopkeeperId', 'fullname email')
+    const { page = 1, limit = 20, type } = req.query;
+    
+    // Fetch Grofast Admin Wallet
+    const grofastWallet = await GrofastWallet.findOne().lean();
+
+    if (type === 'shopkeeper') {
+      const wallets = await ShopkeeperWallet.find()
+        .populate('shopkeeperId', 'fullname email phone role status')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .lean();
+      const total = await ShopkeeperWallet.countDocuments();
+      return res.json({ 
+        success: true, 
+        data: { wallets, grofastWallet }, 
+        type: 'shopkeeper', 
+        pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) } 
+      });
+    }
+
+    if (type === 'deliveryboy') {
+      const wallets = await DeliveryBoyWallet.find()
+        .populate('deliveryBoyId', 'fullname email phone role status')
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .lean();
+      const total = await DeliveryBoyWallet.countDocuments();
+      return res.json({ 
+        success: true, 
+        data: { wallets, grofastWallet }, 
+        type: 'deliveryboy', 
+        pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) } 
+      });
+    }
+
+    // Default: Return both wallets
+    const shopkeeperWallets = await ShopkeeperWallet.find()
+      .populate('shopkeeperId', 'fullname email phone role status')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .lean();
-    const total = await ShopkeeperWallet.countDocuments();
-    res.json({ success: true, data: wallets, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) } });
+    const totalShopkeeper = await ShopkeeperWallet.countDocuments();
+
+    const deliveryBoyWallets = await DeliveryBoyWallet.find()
+      .populate('deliveryBoyId', 'fullname email phone role status')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .lean();
+    const totalDeliveryBoy = await DeliveryBoyWallet.countDocuments();
+
+    res.json({ 
+      success: true, 
+      data: { 
+        shopkeeperWallets, 
+        deliveryBoyWallets,
+        grofastWallet
+      }, 
+      pagination: { 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalShopkeeper, 
+        totalDeliveryBoy,
+        shopkeeperPages: Math.ceil(totalShopkeeper / parseInt(limit)),
+        deliveryBoyPages: Math.ceil(totalDeliveryBoy / parseInt(limit))
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

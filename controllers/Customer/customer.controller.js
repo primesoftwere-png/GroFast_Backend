@@ -7,6 +7,7 @@ const CustomerAddress = require("../../models/Customer/CustomerAddress");
 const User = require("../../models/Auth/User");
 const Shop = require("../../models/ShopKeeper/Shop");
 const mongoose = require("mongoose");
+const cacheService = require("../../services/cache.service");
 
 // ✅ Get all products with optional category filter
 module.exports.getAllProducts = async (req, res) => {
@@ -273,13 +274,25 @@ module.exports.getProductById = async (req, res) => {
       });
     }
 
+    const cacheKey = `customer:product:${id}`;
+    
+    // Check if data is in Redis cache
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData) {
+      return res.status(200).json({
+        success: true,
+        data: cachedData,
+      });
+    }
+
     const product = await productModel
       .findById(id)
       .populate("productCategory", "categoryName categoryDescription")
       .populate({
         path: "createdBy",
         select: "fullname email role",
-      });
+      })
+      .lean();
 
     if (!product) {
       return res.status(404).json({
@@ -287,6 +300,9 @@ module.exports.getProductById = async (req, res) => {
         message: "Product not found",
       });
     }
+
+    // Store in Redis cache for 20 minutes (1200 seconds)
+    await cacheService.setEx(cacheKey, 1200, product);
 
     res.status(200).json({
       success: true,

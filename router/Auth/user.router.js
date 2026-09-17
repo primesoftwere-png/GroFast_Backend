@@ -14,6 +14,7 @@ router.put(
   userController.updateAddress
 );
 router.get("/profile", authMiddleware.userMiddlewere, userController.profile);
+router.put("/profile", authMiddleware.userMiddlewere, upload.single('profileImage'), userController.updateProfile);
 router.put("/update-profile", authMiddleware.userMiddlewere, upload.single('profileImage'), userController.updateProfile);
 router.put("/profile/avatar", authMiddleware.userMiddlewere, upload.single('avatar'), userController.updateAvatar);
 router.post("/profile/avatar", authMiddleware.userMiddlewere, upload.single('avatar'), userController.updateAvatar);

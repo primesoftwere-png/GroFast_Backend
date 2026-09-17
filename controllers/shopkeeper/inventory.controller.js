@@ -8,7 +8,7 @@ const InventoryLog = require('../../models/ShopKeeper/InventoryLog');
 module.exports.getInventory = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { search, category, inStock, page = 1, limit = 50 } = req.query;
+    const { search, category, categoryId, inStock, page = 1, limit = 50 } = req.query;
 
     const shopkeeper = await Shopkeeper.findOne({ userId });
     if (!shopkeeper) {
@@ -28,8 +28,8 @@ module.exports.getInventory = async (req, res) => {
       ];
     }
 
-    if (category) {
-      query.productCategory = category;
+    if (category || categoryId) {
+      query.productCategory = categoryId || category;
     }
 
     if (inStock === 'true') {

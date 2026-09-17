@@ -4,6 +4,7 @@ const ShopkeeperKYC = require("../../models/ShopKeeper/ShopkeeperKYC");
 const DeliveryBoy = require("../../models/DeliveryBoy/DeliveryBoy");
 const User = require("../../models/user.model");
 const Shopkeeper = require("../../models/ShopKeeper/Shopkeeper");
+const Shop = require("../../models/ShopKeeper/Shop");
 
 // ==================== DELIVERY BOY KYC MANAGEMENT ====================
 
@@ -517,6 +518,12 @@ module.exports.approveShopkeeperKYC = async (req, res) => {
         'roleDetails.shopkeeper.status': 'approved',
         'roleDetails.shopkeeper.approvedAt': Date.now()
       });
+
+      // Update the Shop status and isVerified
+      await Shop.findOneAndUpdate(
+        { shopkeeperId: kyc.shopkeeperId._id },
+        { status: 'ACTIVE', isVerified: true, verifiedAt: Date.now(), isOpen: true }
+      );
     }
 
     return res.status(200).json({
